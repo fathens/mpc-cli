@@ -35,25 +35,16 @@ fn sha512_256i(tag: Option<&[u8]>, src_list: &[BigUint]) -> Hash256 {
     sha512_256(tag, bss.as_slice())
 }
 
-macro_rules! sha512_256 {
-    ($($src:expr),+) => {{
-        let src_list = [$($src),+];
-        sha512_256(None, &src_list)
-    }};
+pub fn hash_sha512_256(src_list: &[&[u8]]) -> Hash256 {
+    sha512_256(None, src_list)
 }
 
-macro_rules! sha512_256i {
-    ($($src:expr),+) => {{
-        let src_list = [$($src),+];
-        sha512_256i(None, &src_list)
-    }};
+pub fn hash_sha512_256i(src_list: &[BigUint]) -> Hash256 {
+    sha512_256i(None, src_list)
 }
 
-macro_rules! sha512_256i_tagged {
-    ($tag:expr, $($src:expr),+) => {{
-        let src_list = [$($src),+];
-        sha512_256i(Some($tag), &src_list)
-    }};
+pub fn hash_sha512_256i_tagged(tag: &[u8], src_list: &[BigUint]) -> Hash256 {
+    sha512_256i(Some(tag), src_list)
 }
 
 #[cfg(test)]
@@ -62,7 +53,7 @@ mod tests {
 
     #[test]
     fn hash_bytes() {
-        let one = sha512_256!("one".as_bytes());
+        let one = hash_sha512_256(&["one".as_bytes()]);
         assert_eq!(
             [
                 155, 131, 203, 249, 98, 196, 229, 70, 2, 28, 211, 87, 227, 190, 237, 33, 234, 222,
@@ -70,7 +61,7 @@ mod tests {
             ],
             one.0
         );
-        let two = sha512_256!("hello".as_bytes(), "world".as_bytes());
+        let two = hash_sha512_256(&["hello".as_bytes(), "world".as_bytes()]);
         assert_eq!(
             [
                 123, 126, 124, 145, 206, 51, 245, 169, 8, 47, 212, 46, 66, 170, 66, 11, 82, 160,
@@ -82,7 +73,7 @@ mod tests {
 
     #[test]
     fn hash_bigint() {
-        let one = sha512_256i!(BigUint::from(12345678_u32));
+        let one = hash_sha512_256i(&[BigUint::from(12345678_u32)]);
         assert_eq!(
             [
                 67, 219, 167, 235, 231, 133, 107, 20, 13, 26, 137, 209, 227, 44, 166, 243, 178,
@@ -90,7 +81,7 @@ mod tests {
             ],
             one.0
         );
-        let two = sha512_256i!(BigUint::from(12345678_u32), BigUint::from(34567890_u32));
+        let two = hash_sha512_256i(&[BigUint::from(12345678_u32), BigUint::from(34567890_u32)]);
         assert_eq!(
             [
                 204, 108, 54, 96, 23, 83, 16, 141, 6, 196, 205, 169, 56, 190, 16, 86, 190, 140,
@@ -98,11 +89,11 @@ mod tests {
             ],
             two.0
         );
-        let three = sha512_256i!(
+        let three = hash_sha512_256i(&[
             BigUint::from(12345678_u32),
             BigUint::from(0_u32),
-            BigUint::from(34567890_u32)
-        );
+            BigUint::from(34567890_u32),
+        ]);
         assert_eq!(
             [
                 139, 229, 38, 79, 150, 188, 146, 98, 69, 214, 76, 111, 80, 122, 155, 236, 73, 128,
@@ -114,7 +105,7 @@ mod tests {
 
     #[test]
     fn hash_bigint_tagged() {
-        let one = sha512_256i_tagged!("tag-a".as_bytes(), BigUint::from(12345678_u32));
+        let one = hash_sha512_256i_tagged("tag-a".as_bytes(), &[BigUint::from(12345678_u32)]);
         assert_eq!(
             [
                 62, 229, 129, 172, 169, 125, 219, 131, 105, 95, 195, 233, 170, 196, 197, 213, 236,
@@ -122,10 +113,9 @@ mod tests {
             ],
             one.0
         );
-        let two = sha512_256i_tagged!(
+        let two = hash_sha512_256i_tagged(
             "tag-b".as_bytes(),
-            BigUint::from(12345678_u32),
-            BigUint::from(34567890_u32)
+            &[BigUint::from(12345678_u32), BigUint::from(34567890_u32)],
         );
         assert_eq!(
             [
@@ -134,11 +124,13 @@ mod tests {
             ],
             two.0
         );
-        let three = sha512_256i_tagged!(
+        let three = hash_sha512_256i_tagged(
             "tag-c".as_bytes(),
-            BigUint::from(12345678_u32),
-            BigUint::from(0_u32),
-            BigUint::from(34567890_u32)
+            &[
+                BigUint::from(12345678_u32),
+                BigUint::from(0_u32),
+                BigUint::from(34567890_u32),
+            ],
         );
         assert_eq!(
             [
