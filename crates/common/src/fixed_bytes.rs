@@ -2,7 +2,6 @@ pub trait FixedBytes {
     fn copy_bytes(&self) -> bytes::Bytes;
 }
 
-#[macro_export]
 macro_rules! fixed_bytes {
     ($t:ident) => {
         impl TryFrom<&[u8]> for $t {
@@ -37,4 +36,4 @@ macro_rules! fixed_bytes {
         }
     };
 }
-pub use fixed_bytes;
+pub(crate) use fixed_bytes;
