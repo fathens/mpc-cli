@@ -1,41 +1,34 @@
-use num_bigint::{BigInt, BigUint, ModInverse, ToBigInt};
-use num_integer::Integer;
-use num_traits::Signed;
+use num_bigint::BigUint;
+use num_modular::{ModularAbs, ModularCoreOps, ModularPow, ModularUnaryOps};
+use num_traits::Zero;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModInt(BigUint);
 
 impl ModInt {
-    pub fn adjust(&self, x: BigInt) -> BigUint {
-        let m = self.0.to_bigint().unwrap();
-        let r = if x.abs() >= m { x.mod_floor(&m) } else { x };
-        let r = if r.is_negative() { r + m } else { r };
-        r.to_biguint().unwrap()
-    }
-
     pub fn add(&self, x: BigUint, y: BigUint) -> BigUint {
-        self.adjust((x + y).to_bigint().unwrap())
+        x.addm(&y, &self.0)
     }
 
     pub fn sub(&self, x: BigUint, y: BigUint) -> BigUint {
-        self.adjust(x.to_bigint().unwrap() - y.to_bigint().unwrap())
+        x.subm(&y, &self.0)
     }
 
     pub fn mul(&self, x: BigUint, y: BigUint) -> BigUint {
-        self.adjust((x * y).to_bigint().unwrap())
+        x.mulm(&y, &self.0)
     }
 
     pub fn div(&self, x: BigUint, y: BigUint) -> BigUint {
-        self.adjust((x / y).to_bigint().unwrap())
+        let r = x / y;
+        r.addm(&BigUint::zero(), &self.0)
     }
 
     pub fn pow(&self, x: BigUint, y: BigUint) -> BigUint {
-        x.modpow(&y, &self.0)
+        x.powm(&y, &self.0)
     }
 
     pub fn mod_inverse(&self, x: BigUint) -> BigUint {
-        let ui = x.mod_inverse(&self.0).unwrap();
-        ui.to_biguint().unwrap()
+        x.invm(&self.0).unwrap()
     }
 }
 
