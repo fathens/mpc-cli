@@ -1,3 +1,4 @@
+use num_bigint::BigUint;
 use sha2::{Digest, Sha512_256};
 
 const HASH_INPUT_DELIMITER: [u8; 1] = ['$' as u8];
@@ -18,10 +19,24 @@ fn sha512_256(src_list: &[&[u8]]) -> [u8; 32] {
     hasher.finalize().into()
 }
 
+fn sha512_256i(src_list: &[BigUint]) -> BigUint {
+    let bs_list: Vec<_> = src_list.iter().map(|x| x.to_bytes_be()).collect();
+    let bss: Vec<_> = bs_list.iter().map(|x| x.as_slice()).collect();
+    let hash = sha512_256(bss.as_slice());
+    BigUint::from_bytes_be(&hash)
+}
+
 macro_rules! sha512_256 {
     ($($src:expr),+) => {{
         let src_list = [$($src),+];
         sha512_256(&src_list)
+    }};
+}
+
+macro_rules! sha512_256i {
+    ($($src:expr),+) => {{
+        let src_list = [$($src),+];
+        sha512_256i(&src_list)
     }};
 }
 
@@ -30,7 +45,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sample_hash() {
+    fn hash_bytes() {
         let one = sha512_256!("one".as_bytes());
         assert_eq!(
             [
@@ -46,6 +61,26 @@ mod tests {
                 117, 28, 8, 114, 142, 122, 134, 191, 158, 155, 65, 179, 239, 4
             ],
             two
+        );
+    }
+
+    #[test]
+    fn hash_bigint() {
+        let one = sha512_256i!(BigUint::from(12345678_u32));
+        assert_eq!(
+            vec![
+                67, 219, 167, 235, 231, 133, 107, 20, 13, 26, 137, 209, 227, 44, 166, 243, 178,
+                187, 225, 8, 188, 216, 190, 110, 158, 214, 125, 4, 251, 94, 93, 188
+            ],
+            one.to_bytes_be()
+        );
+        let two = sha512_256i!(BigUint::from(12345678_u32), BigUint::from(34567890_u32));
+        assert_eq!(
+            vec![
+                204, 108, 54, 96, 23, 83, 16, 141, 6, 196, 205, 169, 56, 190, 16, 86, 190, 140,
+                255, 179, 57, 7, 138, 28, 226, 9, 15, 169, 24, 135, 190, 32
+            ],
+            two.to_bytes_be()
         );
     }
 }
