@@ -1,4 +1,5 @@
-use num::{BigUint, Integer};
+use num_bigint::BigUint;
+use num_integer::Integer;
 
 fn rejection_sample(q: BigUint, hash: crate::hash::Hash256) -> BigUint {
     let x = BigUint::from_bytes_be(hash.as_ref());
@@ -9,7 +10,7 @@ fn rejection_sample(q: BigUint, hash: crate::hash::Hash256) -> BigUint {
 mod tests {
     use super::*;
     use crate::hash::hash_sha512_256;
-    use num::{Num, ToPrimitive};
+    use num_traits::{Num, ToPrimitive};
 
     #[test]
     fn test_rejection_sample() {

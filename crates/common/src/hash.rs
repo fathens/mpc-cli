@@ -1,5 +1,6 @@
 use crate::fixed_bytes::{fixed_bytes, FixedBytes};
-use num::{BigUint, Zero};
+use num_bigint::BigUint;
+use num_traits::Zero;
 use sha2::{Digest, Sha512_256};
 
 const HASH_INPUT_DELIMITER: [u8; 1] = ['$' as u8];

@@ -5,5 +5,7 @@ edition = "2021"
 
 [dependencies]
 sha2 = "0.10.8"
-num = "0.4.1"
+num-bigint = { package = "num-bigint-dig", version = "0.8", default-features = false, features = ["prime", "rand", "zeroize"] }
+num-traits = "0.2.14"
+num-integer = "0.1.45"
 bytes = "1.5.0"
