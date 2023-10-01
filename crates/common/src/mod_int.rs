@@ -1,5 +1,6 @@
+use crate::{CommonError, Result};
 use num_bigint::BigUint;
-use num_modular::{ModularAbs, ModularCoreOps, ModularPow, ModularUnaryOps};
+use num_modular::{ModularCoreOps, ModularPow, ModularUnaryOps};
 use num_traits::Zero;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -18,17 +19,21 @@ impl ModInt {
         x.mulm(&y, &self.0)
     }
 
-    pub fn div(&self, x: BigUint, y: BigUint) -> BigUint {
+    pub fn div(&self, x: BigUint, y: BigUint) -> Result<BigUint> {
+        if y.is_zero() {
+            return Err(CommonError::division_by_zero());
+        }
         let r = x / y;
-        r.addm(&BigUint::zero(), &self.0)
+        let r = r.addm(&BigUint::zero(), &self.0);
+        Ok(r)
     }
 
     pub fn pow(&self, x: BigUint, y: BigUint) -> BigUint {
         x.powm(&y, &self.0)
     }
 
-    pub fn mod_inverse(&self, x: BigUint) -> BigUint {
-        x.invm(&self.0).unwrap()
+    pub fn mod_inverse(&self, x: BigUint) -> Result<BigUint> {
+        x.invm(&self.0).ok_or(CommonError::division_by_zero())
     }
 }
 
@@ -90,11 +95,14 @@ mod tests {
     fn mod_int_div() {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32, y: u32, expected: u32| {
-            assert_eq!(
-                m.div(BigUint::from(x), BigUint::from(y)),
-                BigUint::from(expected)
-            );
+            let r = m.div(BigUint::from(x), BigUint::from(y));
+            if let Ok(r) = r {
+                assert_eq!(r, BigUint::from(expected));
+            } else {
+                assert_eq!(y, 0);
+            }
         };
+        check(5, 0, 0);
         check(7, 1, 7);
         check(7, 2, 3);
         check(9, 3, 3);
@@ -123,12 +131,22 @@ mod tests {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32| {
             let r = m.mod_inverse(BigUint::from(x));
-            let y = m.mul(r, BigUint::from(x));
-            assert_eq!(y, BigUint::one());
+            if let Ok(r) = r {
+                let y = m.mul(r, BigUint::from(x));
+                assert_eq!(y, BigUint::one());
+            } else {
+                assert_eq!(x == 0 || 10 % x == 0 || x % 2 == 0, true);
+            }
         };
+        check(0);
         check(1);
+        check(2);
         check(3);
+        check(4);
+        check(5);
+        check(6);
         check(7);
+        check(8);
         check(9);
     }
 }
