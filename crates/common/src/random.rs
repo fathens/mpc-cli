@@ -1,25 +1,45 @@
 use crate::{CommonError, Result};
-use num_bigint::BigUint;
-use rand::RngCore;
+use num_bigint::{BigUint, RandBigInt};
+use num_prime::nt_funcs::is_safe_prime;
+use num_traits::Zero;
 use std::ops::RangeInclusive;
 
-const RANDOM_BITS_RANGE: RangeInclusive<u32> = 1..=5000;
+const RANDOM_BITS_RANGE: RangeInclusive<u64> = 1..=5000;
 
-pub fn get_random_int(bits: u32) -> Result<BigUint> {
+fn check_bits_range(bits: u64) -> Result<()> {
     if !RANDOM_BITS_RANGE.contains(&bits) {
         return Err(CommonError::invalid_random_bits_length(
             bits,
             RANDOM_BITS_RANGE,
         ));
     }
+    Ok(())
+}
 
-    let bs_len = (bits + 7) / 8;
-    let mut buf = vec![0_u8; bs_len as usize];
+pub fn get_random_int(bits: u64) -> Result<BigUint> {
+    check_bits_range(bits)?;
+
     let mut rng = rand::thread_rng();
-    rng.fill_bytes(buf.as_mut_slice());
-    let mut r = BigUint::from_bytes_be(&buf);
-    for bit_pos in bits..(bs_len * 8) {
-        r.set_bit(bit_pos as u64, false);
+    let r = rng.gen_biguint(bits);
+    Ok(r)
+}
+
+pub fn get_random_int_cap(ceiling: &BigUint) -> Result<BigUint> {
+    check_bits_range(ceiling.bits())?;
+
+    let mut rng = rand::thread_rng();
+    let r = rng.gen_biguint_below(ceiling);
+    Ok(r)
+}
+
+pub fn get_random_prime_int(bits: u64) -> Result<BigUint> {
+    check_bits_range(bits)?;
+
+    let mut rnd = rand::thread_rng();
+    let mut r = BigUint::zero();
+    while r.is_zero() || !is_safe_prime(&r).probably() {
+        r = rnd.gen_biguint(bits);
+        r.set_bit(0, true);
     }
     Ok(r)
 }
@@ -31,10 +51,17 @@ mod tests {
 
     #[test]
     fn get_random_int_success() {
-        let check = |bits: u32| {
+        let check = |bits: u64| {
             let r = get_random_int(bits).unwrap();
             let ceiling = BigUint::one() << bits;
-            assert_eq!(true, r < ceiling);
+            assert_eq!(
+                true,
+                r < ceiling,
+                "r: {}, ceiling(bits): {}({})",
+                r,
+                ceiling,
+                bits
+            );
         };
 
         for bits in RANDOM_BITS_RANGE {
@@ -57,5 +84,39 @@ mod tests {
             CommonError::invalid_random_bits_length(5001, RANDOM_BITS_RANGE),
             err
         );
+    }
+
+    #[test]
+    fn get_random_int_cap_success() {
+        let check = |ceiling_bits: u32| {
+            let ceiling = BigUint::one() << ceiling_bits;
+            let r = get_random_int_cap(&ceiling).unwrap();
+            assert_eq!(true, r < ceiling);
+        };
+
+        for ceiling_bits in 1..100 {
+            for _ in 0..100 {
+                check(ceiling_bits);
+            }
+        }
+    }
+
+    #[test]
+    fn get_random_prime_int_success() {
+        let check = |bits: u64| {
+            let r = get_random_prime_int(bits).unwrap();
+            assert_eq!(
+                true,
+                r.bits() <= bits,
+                "r: {}({}), bits: {}",
+                r,
+                r.bits(),
+                bits
+            );
+        };
+
+        for _ in 0..10 {
+            check(128);
+        }
     }
 }
