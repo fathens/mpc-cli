@@ -23,7 +23,7 @@ pub fn get_random_int(bits: u64) -> Result<BigUint> {
     Ok(r)
 }
 
-pub fn get_random_int_cap(ceiling: &BigUint) -> Result<BigUint> {
+pub fn get_random_positive_int(ceiling: &BigUint) -> Result<BigUint> {
     check_bits_range(ceiling.bits())?;
 
     let mut rng = rand::thread_rng();
@@ -57,7 +57,7 @@ pub fn get_random_positive_relatively_prime_int(modulus: &BigUint) -> Result<Big
 
     let mut r = BigUint::zero();
     while r.is_zero() || !is_number_in_multiplicative_group(modulus, &r) {
-        r = get_random_int_cap(modulus)?;
+        r = get_random_positive_int(modulus)?;
     }
     Ok(r)
 }
@@ -78,7 +78,7 @@ pub fn get_random_quadratic_non_residue(modulus: &BigUint) -> Result<BigUint> {
 
     let mut r = BigUint::zero();
     while r.is_zero() || r.jacobi(modulus) >= 0 {
-        r = get_random_int_cap(modulus)?;
+        r = get_random_positive_int(modulus)?;
     }
     Ok(r)
 }
@@ -124,7 +124,7 @@ mod tests {
     fn get_random_int_cap_success() {
         let check = |ceiling_bits: u32| {
             let ceiling = BigUint::one() << ceiling_bits;
-            let r = get_random_int_cap(&ceiling).unwrap();
+            let r = get_random_positive_int(&ceiling).unwrap();
             assert_eq!(true, r < ceiling);
         };
 
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn get_random_int_cap_failure() {
-        let err = get_random_int_cap(&BigUint::zero()).unwrap_err();
+        let err = get_random_positive_int(&BigUint::zero()).unwrap_err();
         assert_eq!(CommonError::out_of_range(0, RANDOM_BITS_RANGE), err);
     }
 
