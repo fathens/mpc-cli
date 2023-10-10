@@ -5,32 +5,17 @@ use once_cell::sync::Lazy;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use std::iter::Iterator;
 
-const PRIMES_AS_BIT_MASK: u64 = 1 << 2
-    | 1 << 3
-    | 1 << 5
-    | 1 << 7
-    | 1 << 11
-    | 1 << 13
-    | 1 << 17
-    | 1 << 19
-    | 1 << 23
-    | 1 << 29
-    | 1 << 31
-    | 1 << 37
-    | 1 << 41
-    | 1 << 43
-    | 1 << 47
-    | 1 << 53
-    | 1 << 59
-    | 1 << 61;
+const SMALL_PRIMES: [u8; 18] = [
+    2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61,
+];
 
 const PRIMES_A_MEMBERS: [u8; 9] = [3, 5, 7, 11, 13, 17, 19, 23, 37];
-static PRIMES_A: Lazy<u32> =
+const PRIMES_A: Lazy<u32> =
     Lazy::new(|| PRIMES_A_MEMBERS.iter().fold(1, |acc, p| acc * (*p as u32)));
 const PRIMES_B_MEMBERS: [u8; 6] = [29, 31, 41, 43, 47, 53];
-static PRIMES_B: Lazy<u32> =
+const PRIMES_B: Lazy<u32> =
     Lazy::new(|| PRIMES_B_MEMBERS.iter().fold(1, |acc, p| acc * (*p as u32)));
-static PRIMES_AB: Lazy<u64> = Lazy::new(|| {
+const PRIMES_AB: Lazy<u64> = Lazy::new(|| {
     let ab = (*PRIMES_A as u128) * (*PRIMES_B as u128);
     let mask = (1 << 64) - 1;
     (ab & mask) as u64
@@ -38,8 +23,8 @@ static PRIMES_AB: Lazy<u64> = Lazy::new(|| {
 
 pub fn is_prime(x: &BigUint, reps: usize) -> bool {
     if x.bits() <= 6 {
-        let v = x.to_u64().unwrap();
-        return PRIMES_AS_BIT_MASK & (1 << v) != 0;
+        let v = x.to_u8().unwrap();
+        return SMALL_PRIMES.contains(&v);
     } else if x.is_even() {
         return false;
     }
