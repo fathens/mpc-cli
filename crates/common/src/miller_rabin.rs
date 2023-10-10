@@ -22,6 +22,10 @@ const PRIMES_AB: Lazy<u64> = Lazy::new(|| {
 });
 
 pub fn is_prime(x: &BigUint, reps: usize) -> bool {
+    probably_prime_miller_rabin(x, reps)
+}
+
+pub fn probably_by_small_primes(x: &BigUint) -> bool {
     if x.bits() <= 6 {
         let v = x.to_u8().unwrap();
         return SMALL_PRIMES.contains(&v);
@@ -33,17 +37,14 @@ pub fn is_prime(x: &BigUint, reps: usize) -> bool {
     let r_a = (r % (*PRIMES_A as u64)) as u32;
     let r_b = (r % (*PRIMES_B as u64)) as u32;
 
-    if PRIMES_A_MEMBERS
+    let by_a = PRIMES_A_MEMBERS
         .into_par_iter()
-        .any(|m| (r_a % (m as u32)).is_zero())
-        || PRIMES_B_MEMBERS
-            .into_par_iter()
-            .any(|m| (r_b % (m as u32)).is_zero())
-    {
-        return false;
-    }
+        .any(|m| (r_a % (m as u32)).is_zero());
+    let by_b = PRIMES_B_MEMBERS
+        .into_par_iter()
+        .any(|m| (r_b % (m as u32)).is_zero());
 
-    probably_prime_miller_rabin(x, reps)
+    by_a || by_b
 }
 
 fn probably_prime_miller_rabin(n: &BigUint, reps: usize) -> bool {
