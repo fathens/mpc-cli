@@ -24,12 +24,14 @@ impl GermainSafePrime {
 mod generator {
     use crate::miller_rabin;
     use num_bigint::{BigUint, RandBigInt};
+    use num_prime::{nt_funcs, PrimalityTestConfig};
     use num_traits::{One, ToPrimitive};
     use once_cell::sync::Lazy;
     use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
     use std::iter::repeat_with;
 
-    const TEST_NUM: usize = 30;
+    const CONFIG_STRICT: Lazy<PrimalityTestConfig> = Lazy::new(|| PrimalityTestConfig::strict());
+    const CONFIG_NORMAL: Lazy<PrimalityTestConfig> = Lazy::new(|| PrimalityTestConfig::default());
 
     const SMALL_PRIMES: [u8; 15] = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
 
@@ -78,14 +80,14 @@ mod generator {
         let two = &BigUint::from(2_u8);
 
         let check = |(q, p): &(BigUint, BigUint)| {
-            if q.bits() != bits || !is_prime(20, q) {
+            if q.bits() != bits || !is_prime(q, false) {
                 return false;
             }
             let e = two.modpow(&(p - 1_u8), p);
             if !e.is_one() {
                 return false;
             }
-            return is_prime(TEST_NUM, q) && is_prime(TEST_NUM, p);
+            return is_prime(q, true) && is_prime(p, true);
         };
 
         loop {
@@ -96,8 +98,12 @@ mod generator {
         }
     }
 
-    fn is_prime(num: usize, v: &BigUint) -> bool {
-        miller_rabin::is_prime(v, num)
+    fn is_prime(v: &BigUint, is_strict: bool) -> bool {
+        if is_strict {
+            nt_funcs::is_prime(v, Some(*CONFIG_STRICT)).probably()
+        } else {
+            miller_rabin::is_prime(v, 20)
+        }
     }
 }
 
