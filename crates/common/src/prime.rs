@@ -1,0 +1,171 @@
+use num_bigint::{BigUint, RandBigInt};
+use num_prime::{nt_funcs, PrimalityTestConfig};
+use num_traits::{One, ToPrimitive};
+use once_cell::sync::Lazy;
+use rayon::iter::ParallelIterator;
+use rayon::prelude::IntoParallelRefIterator;
+use std::iter::repeat_with;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GermainSafePrime {
+    q: BigUint,
+    p: BigUint, // 2q + 1
+}
+
+impl GermainSafePrime {
+    pub fn prime(&self) -> &BigUint {
+        &self.q
+    }
+
+    pub fn safe_prime(&self) -> &BigUint {
+        &self.p
+    }
+
+    pub fn generate(bits: u64) -> Self {
+        let (q, p) = Self::gen_qp(bits - 1);
+        Self { q, p }
+    }
+
+    const CONCURRENT_NUM: usize = 100;
+    fn gen_qp(bits: u64) -> (BigUint, BigUint) {
+        let mut rng = rand::thread_rng();
+        let mut do_gen = || {
+            let mut v = rng.gen_biguint(bits);
+            v.set_bit(bits - 1, true);
+            v.set_bit(bits - 2, true);
+            v.set_bit(0, true);
+            v
+        };
+        let two = &BigUint::from(2_u8);
+
+        let config = Some(PrimalityTestConfig::strict());
+        let is_prime = |v: &BigUint| nt_funcs::is_prime(v, config).probably();
+
+        let check = |(q, p): &(BigUint, BigUint)| {
+            if q.bits() != bits || !miller_rabin::is_prime(q, None) {
+                return false;
+            }
+            let e = two.modpow(&(p - 1_u8), p);
+            if !e.is_one() {
+                return false;
+            }
+            return is_prime(q) && is_prime(p);
+        };
+
+        loop {
+            let trials: Vec<_> = repeat_with(|| do_gen())
+                .take(Self::CONCURRENT_NUM)
+                .collect();
+            if let Some((q, p)) = trials
+                .par_iter()
+                .filter_map(Self::with_delta)
+                .find_any(check)
+            {
+                return (q, p);
+            }
+        }
+    }
+
+    const DELTA_BITS: u64 = 20;
+    fn with_delta(origin: &BigUint) -> Option<(BigUint, BigUint)> {
+        let mut q = origin.clone();
+        let times = 1_u32 << (Self::DELTA_BITS - 1);
+        for _ in 1..times {
+            if check_by_small_primes(&q) && !(&q % 3_u8).is_one() {
+                let mut p = q.clone();
+                p <<= 1;
+                p += 1_u8;
+                if check_by_small_primes(&p) {
+                    return Some((q, p));
+                }
+            }
+            q += 2_u8;
+        }
+        None
+    }
+}
+
+const SMALL_PRIMES: [u8; 15] = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
+
+const SMALL_PRIMES_PRODUCT: Lazy<BigUint> = Lazy::new(|| {
+    SMALL_PRIMES
+        .iter()
+        .fold(1_u128, |acc, p| acc * (*p as u128))
+        .into()
+});
+
+fn check_by_small_primes(v: &BigUint) -> bool {
+    let m = (v % &*SMALL_PRIMES_PRODUCT).to_u128().unwrap();
+    SMALL_PRIMES.into_iter().all(|p| {
+        let prime = p as u128;
+        m == prime || m % prime != 0
+    })
+}
+
+pub mod miller_rabin {
+    use num_bigint::{BigUint, RandBigInt};
+    use num_traits::One;
+    use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+
+    const DEFAULT_REPS: usize = 20;
+
+    pub fn is_prime(n: &BigUint, reps: Option<usize>) -> bool {
+        let reps = reps.unwrap_or(DEFAULT_REPS);
+        let nm1 = n - 1_u8;
+        let k = nm1.trailing_zeros().unwrap_or(0);
+        let q = &nm1 >> k;
+        let nm3 = &nm1 - 2_u8;
+
+        let mut rng = rand::thread_rng();
+        let samples: Vec<_> = (1..=reps)
+            .into_iter()
+            .map(|idx| {
+                if idx == reps {
+                    BigUint::from(2_u8)
+                } else {
+                    let a = rng.gen_biguint_below(&nm3);
+                    a + 2_u8
+                }
+            })
+            .collect();
+
+        samples.par_iter().all(|x| {
+            let mut y = x.modpow(&q, n);
+            if y.is_one() || y == nm1 {
+                return true;
+            }
+
+            for _ in 1..k {
+                y = y.sqrt() % n;
+                if y == nm1 {
+                    return true;
+                }
+                if y.is_one() {
+                    return false;
+                }
+            }
+            return false;
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use num_prime::nt_funcs::is_prime;
+    use num_prime::PrimalityTestConfig;
+
+    #[test]
+    fn generator_safe_prime() {
+        let bits = 1024;
+        let gsp = GermainSafePrime::generate(bits);
+        let q = gsp.prime();
+        let p = gsp.safe_prime();
+        let config = Some(PrimalityTestConfig::strict());
+        assert_eq!(q.clone() * 2_u32 + 1_u32, p.clone());
+        assert!(is_prime(q, config).probably());
+        assert!(is_prime(p, config).probably());
+        assert_eq!(q.bits(), bits - 1);
+        assert_eq!(p.bits(), bits);
+    }
+}
