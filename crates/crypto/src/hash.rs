@@ -51,6 +51,8 @@ pub fn hash_sha512_256i_tagged(tag: &[u8], src_list: &[BigUint]) -> Hash256 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_integer::Integer;
+    use num_traits::ToPrimitive;
 
     #[test]
     fn hash_bytes() {
@@ -140,5 +142,18 @@ mod tests {
             ],
             three.0
         );
+    }
+
+    #[test]
+    fn test_rejection_sample() {
+        let q = BigUint::from(16_u8);
+        let hash = hash_sha512_256(&["hello".as_bytes(), "world".as_bytes()]);
+        let x = rejection_sample(q, hash);
+        assert_eq!(Some(4_u64), x.to_u64());
+    }
+
+    fn rejection_sample(q: BigUint, hash: Hash256) -> BigUint {
+        let x = BigUint::from_bytes_be(hash.as_ref());
+        x.mod_floor(&q)
     }
 }
