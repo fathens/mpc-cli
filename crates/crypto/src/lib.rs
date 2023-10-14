@@ -5,5 +5,5 @@ mod fixed_bytes;
 pub mod hash;
 pub mod hdpath;
 
-pub use error::CryptError;
-type Result<T> = std::result::Result<T, CryptError>;
+pub use error::CryptoError;
+type Result<T> = std::result::Result<T, CryptoError>;

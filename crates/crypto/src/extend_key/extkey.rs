@@ -5,7 +5,7 @@ use crate::extend_key::ecdsa_key::{
 use crate::fixed_bytes::{fixed_bytes, FixedBytes};
 use crate::hdpath::node::Node;
 use crate::hdpath::path::HDPath;
-use crate::CryptError;
+use crate::CryptoError;
 use crate::Result;
 use bytes::Bytes;
 use core::fmt;
@@ -26,7 +26,7 @@ impl Depth {
     fn increment(&self) -> Result<Self> {
         let next = self.0[0]
             .checked_add(1)
-            .ok_or(CryptError::depth_exceeded())?;
+            .ok_or(CryptoError::depth_exceeded())?;
         Ok(Self([next]))
     }
 }
@@ -56,7 +56,7 @@ pub struct ExtKey<A> {
 impl ExtKey<PrvKeyBytes> {
     pub fn from_seed(prefix: base58::Prefix, seed: Bytes) -> Result<Self> {
         if prefix.is_public() {
-            return Err(CryptError::type_missmatched());
+            return Err(CryptoError::type_missmatched());
         }
         let mut hash = HmacSha512::new_from_slice("Bitcoin seed".as_bytes())?;
         hash.update(&seed);
@@ -117,7 +117,7 @@ impl<A: KeyBytes> ExtKey<A> {
 impl<A: PubKey> ExtKey<A> {
     pub fn get_child_normal_only(&self, node: Node) -> Result<Self> {
         if node.is_hardened() {
-            return Err(CryptError::cannot_hardened());
+            return Err(CryptoError::cannot_hardened());
         }
         self.mk_child(
             self.prefix.clone(),
@@ -153,7 +153,7 @@ where
                 prev.and_then(|parent| parent.get_child(*node))
             })
         } else {
-            Err(CryptError::invalid_hdpath())
+            Err(CryptoError::invalid_hdpath())
         }
     }
 
@@ -188,9 +188,9 @@ impl<A: KeyBytes> From<&ExtKey<A>> for base58::DecodedExtKey {
 impl<A> TryFrom<base58::DecodedExtKey> for ExtKey<A>
 where
     A: KeyBytes,
-    A: TryFrom<Bytes, Error = CryptError>,
+    A: TryFrom<Bytes, Error = CryptoError>,
 {
-    type Error = CryptError;
+    type Error = CryptoError;
 
     fn try_from(src: base58::DecodedExtKey) -> std::result::Result<Self, Self::Error> {
         let r = Self {

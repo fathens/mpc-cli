@@ -5,18 +5,18 @@ pub trait FixedBytes {
 macro_rules! fixed_bytes {
     ($t:ident) => {
         impl TryFrom<&[u8]> for $t {
-            type Error = crate::CryptError;
+            type Error = crate::CryptoError;
 
             fn try_from(src: &[u8]) -> std::result::Result<Self, Self::Error> {
                 Ok(Self(
                     src.try_into()
-                        .map_err(|_| crate::CryptError::wrong_length_bytes())?,
+                        .map_err(|_| crate::CryptoError::wrong_length_bytes())?,
                 ))
             }
         }
 
         impl TryFrom<bytes::Bytes> for $t {
-            type Error = crate::CryptError;
+            type Error = crate::CryptoError;
 
             fn try_from(src: bytes::Bytes) -> std::result::Result<Self, Self::Error> {
                 src.as_ref().try_into()
