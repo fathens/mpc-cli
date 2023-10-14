@@ -1,44 +1,44 @@
 use hmac::digest::InvalidLength;
 
 #[derive(Debug, PartialEq)]
-pub struct CryptError(String);
+pub struct CryptoError(String);
 
-impl CryptError {
-    pub fn invalid_hdpath() -> CryptError {
-        CryptError("Invalid hdpath".to_owned())
+impl CryptoError {
+    pub fn invalid_hdpath() -> CryptoError {
+        CryptoError("Invalid hdpath".to_owned())
     }
 
-    pub fn depth_exceeded() -> CryptError {
-        CryptError("Exceeded depth".to_owned())
+    pub fn depth_exceeded() -> CryptoError {
+        CryptoError("Exceeded depth".to_owned())
     }
 
-    pub fn wrong_length_bytes() -> CryptError {
-        CryptError("Wrong length bytes".to_owned())
+    pub fn wrong_length_bytes() -> CryptoError {
+        CryptoError("Wrong length bytes".to_owned())
     }
 
-    pub fn cannot_hardened() -> CryptError {
-        CryptError("Public key can not derive hardened key".to_owned())
+    pub fn cannot_hardened() -> CryptoError {
+        CryptoError("Public key can not derive hardened key".to_owned())
     }
 
-    pub fn invalid_format(target: &str) -> CryptError {
-        CryptError(format!("Invalid bytes format for {target}"))
+    pub fn invalid_format(target: &str) -> CryptoError {
+        CryptoError(format!("Invalid bytes format for {target}"))
     }
 
-    pub fn type_missmatched() -> CryptError {
-        CryptError("Type miss-matched".to_owned())
+    pub fn type_missmatched() -> CryptoError {
+        CryptoError("Type miss-matched".to_owned())
     }
 
-    pub fn unsupported_version() -> CryptError {
-        CryptError("unsupported version".to_owned())
+    pub fn unsupported_version() -> CryptoError {
+        CryptoError("unsupported version".to_owned())
     }
 }
 
-impl From<InvalidLength> for CryptError {
+impl From<InvalidLength> for CryptoError {
     fn from(src: InvalidLength) -> Self {
         Self(src.to_string())
     }
 }
-impl From<elliptic_curve::Error> for CryptError {
+impl From<elliptic_curve::Error> for CryptoError {
     fn from(src: elliptic_curve::Error) -> Self {
         Self(src.to_string())
     }

@@ -1,6 +1,6 @@
 use crate::extend_key::ecdsa_key::KEY_SIZE;
 use crate::fixed_bytes::{fixed_bytes, FixedBytes};
-use crate::CryptError;
+use crate::CryptoError;
 use crate::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use core::fmt;
@@ -39,7 +39,7 @@ impl Prefix {
         PREFIX_PAIRS
             .get(self)
             .map(|v| v.clone())
-            .ok_or(CryptError::unsupported_version())
+            .ok_or(CryptoError::unsupported_version())
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -50,7 +50,7 @@ impl Prefix {
             .values()
             .find(|a| a == &self)
             .map(|_| ())
-            .ok_or(CryptError::unsupported_version())
+            .ok_or(CryptoError::unsupported_version())
     }
 }
 
@@ -84,10 +84,10 @@ pub fn decode(src: &str) -> Result<DecodedExtKey> {
     let mut buf: Bytes = bs58::decode(src)
         .with_check(None)
         .into_vec()
-        .map_err(|err| CryptError::invalid_format(&err.to_string()))?
+        .map_err(|err| CryptoError::invalid_format(&err.to_string()))?
         .into();
     if buf.len() != ENCODED_BYTE_SIZE {
-        return Err(CryptError::wrong_length_bytes());
+        return Err(CryptoError::wrong_length_bytes());
     }
 
     let prefix: Prefix = buf.split_to(4).try_into()?;
@@ -102,7 +102,7 @@ pub fn decode(src: &str) -> Result<DecodedExtKey> {
         // Drop first byte
         let zero = buf.split_to(1).get_u8();
         if zero != 0 {
-            return Err(CryptError::invalid_format("extend key"));
+            return Err(CryptoError::invalid_format("extend key"));
         }
     }
     let key = buf.into();
@@ -127,7 +127,7 @@ impl fmt::Display for DecodedExtKey {
 }
 
 impl FromStr for DecodedExtKey {
-    type Err = CryptError;
+    type Err = CryptoError;
 
     fn from_str(src: &str) -> std::result::Result<Self, Self::Err> {
         decode(src)
