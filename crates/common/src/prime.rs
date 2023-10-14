@@ -1,10 +1,4 @@
-use num_bigint::{BigUint, RandBigInt};
-use num_prime::{nt_funcs, PrimalityTestConfig};
-use num_traits::{One, ToPrimitive};
-use once_cell::sync::Lazy;
-use rayon::iter::ParallelIterator;
-use rayon::prelude::IntoParallelRefIterator;
-use std::iter::repeat_with;
+use num_bigint::BigUint;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GermainSafePrime {
@@ -22,24 +16,37 @@ impl GermainSafePrime {
     }
 
     pub fn generate(bits: u64) -> Self {
-        let (q, p) = Self::gen_qp(bits - 1);
+        let (q, p) = safe_prime::gen_qp(bits - 1);
         Self { q, p }
     }
+}
+
+mod safe_prime {
+    use super::{miller_rabin, simple_check};
+    use num_bigint::{BigUint, RandBigInt};
+    use num_prime::{nt_funcs, PrimalityTestConfig};
+    use num_traits::One;
+    use rayon::iter::ParallelIterator;
+    use rayon::prelude::IntoParallelRefIterator;
+    use std::iter::repeat_with;
 
     const CONCURRENT_NUM: usize = 100;
-    fn gen_qp(bits: u64) -> (BigUint, BigUint) {
+
+    fn is_prime(v: &BigUint) -> bool {
+        let config = PrimalityTestConfig::strict();
+        nt_funcs::is_prime(v, Some(config)).probably()
+    }
+
+    pub fn gen_qp(bits: u64) -> (BigUint, BigUint) {
         let mut rng = rand::thread_rng();
         let mut do_gen = || {
-            let mut v = rng.gen_biguint(bits);
+            let mut v = rng.gen_biguint(bits - 2);
             v.set_bit(bits - 1, true);
             v.set_bit(bits - 2, true);
             v.set_bit(0, true);
             v
         };
         let two = &BigUint::from(2_u8);
-
-        let config = Some(PrimalityTestConfig::strict());
-        let is_prime = |v: &BigUint| nt_funcs::is_prime(v, config).probably();
 
         let check = |(q, p): &(BigUint, BigUint)| {
             if q.bits() != bits || !miller_rabin::is_prime(q, None) {
@@ -53,29 +60,24 @@ impl GermainSafePrime {
         };
 
         loop {
-            let trials: Vec<_> = repeat_with(|| do_gen())
-                .take(Self::CONCURRENT_NUM)
-                .collect();
-            if let Some((q, p)) = trials
-                .par_iter()
-                .filter_map(Self::with_delta)
-                .find_any(check)
-            {
+            let trials: Vec<_> = repeat_with(|| do_gen()).take(CONCURRENT_NUM).collect();
+            if let Some((q, p)) = trials.par_iter().filter_map(with_delta).find_any(check) {
                 return (q, p);
             }
         }
     }
 
     const DELTA_BITS: u64 = 20;
+
     fn with_delta(origin: &BigUint) -> Option<(BigUint, BigUint)> {
         let mut q = origin.clone();
-        let times = 1_u32 << (Self::DELTA_BITS - 1);
+        let times = 1_u32 << (DELTA_BITS - 1);
         for _ in 1..times {
-            if check_by_small_primes(&q) && !(&q % 3_u8).is_one() {
+            if simple_check::is_prime(&q) && !(&q % 3_u8).is_one() {
                 let mut p = q.clone();
                 p <<= 1;
                 p += 1_u8;
-                if check_by_small_primes(&p) {
+                if simple_check::is_prime(&p) {
                     return Some((q, p));
                 }
             }
@@ -85,21 +87,27 @@ impl GermainSafePrime {
     }
 }
 
-const SMALL_PRIMES: [u8; 15] = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
+pub mod simple_check {
+    use num_bigint::BigUint;
+    use num_traits::ToPrimitive;
+    use once_cell::sync::Lazy;
 
-const SMALL_PRIMES_PRODUCT: Lazy<BigUint> = Lazy::new(|| {
-    SMALL_PRIMES
-        .iter()
-        .fold(1_u128, |acc, p| acc * (*p as u128))
-        .into()
-});
+    const SMALL_PRIMES: [u8; 15] = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
 
-fn check_by_small_primes(v: &BigUint) -> bool {
-    let m = (v % &*SMALL_PRIMES_PRODUCT).to_u128().unwrap();
-    SMALL_PRIMES.into_iter().all(|p| {
-        let prime = p as u128;
-        m == prime || m % prime != 0
-    })
+    const SMALL_PRIMES_PRODUCT: Lazy<BigUint> = Lazy::new(|| {
+        SMALL_PRIMES
+            .iter()
+            .fold(1_u128, |acc, p| acc * (*p as u128))
+            .into()
+    });
+
+    pub fn is_prime(v: &BigUint) -> bool {
+        let m = (v % &*SMALL_PRIMES_PRODUCT).to_u128().unwrap();
+        SMALL_PRIMES.into_iter().all(|p| {
+            let prime = p as u128;
+            m == prime || m % prime != 0
+        })
+    }
 }
 
 pub mod miller_rabin {
@@ -152,20 +160,31 @@ pub mod miller_rabin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::time::time;
     use num_prime::nt_funcs::is_prime;
     use num_prime::PrimalityTestConfig;
+    use std::time::Duration;
 
     #[test]
     fn generator_safe_prime() {
-        let bits = 1024;
-        let gsp = GermainSafePrime::generate(bits);
-        let q = gsp.prime();
-        let p = gsp.safe_prime();
-        let config = Some(PrimalityTestConfig::strict());
-        assert_eq!(q.clone() * 2_u32 + 1_u32, p.clone());
-        assert!(is_prime(q, config).probably());
-        assert!(is_prime(p, config).probably());
-        assert_eq!(q.bits(), bits - 1);
-        assert_eq!(p.bits(), bits);
+        let check = || {
+            let bits = 1024;
+            let (gsp, dur) = time(|| GermainSafePrime::generate(bits));
+            let q = gsp.prime();
+            let p = gsp.safe_prime();
+            let config = Some(PrimalityTestConfig::strict());
+            assert_eq!(q.clone() * 2_u32 + 1_u32, p.clone());
+            assert!(is_prime(q, config).probably());
+            assert!(is_prime(p, config).probably());
+            assert_eq!(q.bits(), bits - 1);
+            assert_eq!(p.bits(), bits);
+            dur
+        };
+
+        let n = 10;
+        let ts: Duration = (0..n).map(|_| check()).sum();
+        let average = ts / n;
+        let secs = (average.as_millis() as f32) / 1000_f32;
+        println!("average {}", secs);
     }
 }
