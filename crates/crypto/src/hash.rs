@@ -9,6 +9,10 @@ const HASH_INPUT_DELIMITER: [u8; 1] = ['$' as u8];
 pub struct Hash256([u8; 32]);
 fixed_bytes!(Hash256);
 
+impl Hash256 {
+    pub const BIT_LENGTH: u64 = 256;
+}
+
 fn sha512_256(tag: Option<&[u8]>, src_list: &[&[u8]]) -> Hash256 {
     let mut hasher = Sha512_256::new();
     if let Some(tag) = tag {

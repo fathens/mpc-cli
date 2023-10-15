@@ -1,6 +1,6 @@
 use hmac::digest::InvalidLength;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CryptoError(String);
 
 impl CryptoError {
@@ -30,6 +30,26 @@ impl CryptoError {
 
     pub fn unsupported_version() -> CryptoError {
         CryptoError("unsupported version".to_owned())
+    }
+
+    pub fn too_many_commitment_parts(got: usize) -> CryptoError {
+        CryptoError(format!("Too many commitment parts: {}", got))
+    }
+
+    pub fn commitment_part_too_large(got: usize) -> CryptoError {
+        CryptoError(format!("Commitment part too large: {}", got))
+    }
+
+    pub fn secrets_too_small(got: usize) -> CryptoError {
+        CryptoError(format!("Secrets too small: {}", got))
+    }
+
+    pub fn secrets_too_large(got: usize) -> CryptoError {
+        CryptoError(format!("Secrets too large: {}", got))
+    }
+
+    pub fn secrets_invalid_part_length(got: usize) -> CryptoError {
+        CryptoError(format!("Secrets invalid part length: {}", got))
     }
 }
 
