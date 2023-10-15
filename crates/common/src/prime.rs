@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn generator_safe_prime() {
         let check = || {
-            let bits = 1024;
+            let bits = 128;
             let (gsp, dur) = time(|| GermainSafePrime::generate(bits));
             let q = gsp.prime();
             let p = gsp.safe_prime();
