@@ -181,6 +181,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "once_cell",
+ "rand",
  "ripemd",
  "sha2",
 ]

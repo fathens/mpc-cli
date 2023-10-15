@@ -1,4 +1,5 @@
 pub mod base58;
+pub mod commitment;
 pub mod error;
 pub mod extend_key;
 mod fixed_bytes;
