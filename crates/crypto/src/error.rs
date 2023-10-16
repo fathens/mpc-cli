@@ -52,6 +52,10 @@ impl CryptoError {
     pub fn secrets_invalid_part_length<A: Display>(got: A) -> CryptoError {
         CryptoError(format!("Secrets invalid part length: {}", got))
     }
+
+    pub fn dln_proof_invalid_length<A: Display>(got: A) -> CryptoError {
+        CryptoError(format!("DLN proof invalid length: {}", got))
+    }
 }
 
 impl From<InvalidLength> for CryptoError {
