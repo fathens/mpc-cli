@@ -7,19 +7,27 @@ use num_traits::Zero;
 pub struct ModInt(BigUint);
 
 impl ModInt {
-    pub fn add(&self, x: BigUint, y: BigUint) -> BigUint {
-        x.addm(&y, &self.0)
+    pub fn new(module: &BigUint) -> Self {
+        Self(module.clone())
     }
 
-    pub fn sub(&self, x: BigUint, y: BigUint) -> BigUint {
-        x.subm(&y, &self.0)
+    pub fn module(&self) -> &BigUint {
+        &self.0
     }
 
-    pub fn mul(&self, x: BigUint, y: BigUint) -> BigUint {
-        x.mulm(&y, &self.0)
+    pub fn add(&self, x: &BigUint, y: &BigUint) -> BigUint {
+        x.addm(y, &self.0)
     }
 
-    pub fn div(&self, x: BigUint, y: BigUint) -> Result<BigUint> {
+    pub fn sub(&self, x: &BigUint, y: &BigUint) -> BigUint {
+        x.subm(y, &self.0)
+    }
+
+    pub fn mul(&self, x: &BigUint, y: &BigUint) -> BigUint {
+        x.mulm(y, &self.0)
+    }
+
+    pub fn div(&self, x: &BigUint, y: &BigUint) -> Result<BigUint> {
         if y.is_zero() {
             return Err(CommonError::division_by_zero());
         }
@@ -28,11 +36,11 @@ impl ModInt {
         Ok(r)
     }
 
-    pub fn pow(&self, x: BigUint, y: BigUint) -> BigUint {
-        x.powm(&y, &self.0)
+    pub fn pow(&self, x: &BigUint, y: &BigUint) -> BigUint {
+        x.powm(y, &self.0)
     }
 
-    pub fn mod_inverse(&self, x: BigUint) -> Result<BigUint> {
+    pub fn mod_inverse(&self, x: &BigUint) -> Result<BigUint> {
         x.invm(&self.0).ok_or(CommonError::division_by_zero())
     }
 }
@@ -47,7 +55,7 @@ mod tests {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32, y: u32, expected: u32| {
             assert_eq!(
-                m.add(BigUint::from(x), BigUint::from(y)),
+                m.add(&BigUint::from(x), &BigUint::from(y)),
                 BigUint::from(expected)
             );
         };
@@ -63,7 +71,7 @@ mod tests {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32, y: u32, expected: u32| {
             assert_eq!(
-                m.sub(BigUint::from(x), BigUint::from(y)),
+                m.sub(&BigUint::from(x), &BigUint::from(y)),
                 BigUint::from(expected)
             );
         };
@@ -80,7 +88,7 @@ mod tests {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32, y: u32, expected: u32| {
             assert_eq!(
-                m.mul(BigUint::from(x), BigUint::from(y)),
+                m.mul(&BigUint::from(x), &BigUint::from(y)),
                 BigUint::from(expected)
             );
         };
@@ -95,7 +103,7 @@ mod tests {
     fn mod_int_div() {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32, y: u32, expected: u32| {
-            let r = m.div(BigUint::from(x), BigUint::from(y));
+            let r = m.div(&BigUint::from(x), &BigUint::from(y));
             if let Ok(r) = r {
                 assert_eq!(r, BigUint::from(expected));
             } else {
@@ -115,7 +123,7 @@ mod tests {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32, y: u32, expected: u32| {
             assert_eq!(
-                m.pow(BigUint::from(x), BigUint::from(y)),
+                m.pow(&BigUint::from(x), &BigUint::from(y)),
                 BigUint::from(expected)
             );
         };
@@ -130,9 +138,9 @@ mod tests {
     fn mod_int_mod_inverse() {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32| {
-            let r = m.mod_inverse(BigUint::from(x));
+            let r = m.mod_inverse(&BigUint::from(x));
             if let Ok(r) = r {
-                let y = m.mul(r, BigUint::from(x));
+                let y = m.mul(&r, &BigUint::from(x));
                 assert_eq!(y, BigUint::one());
             } else {
                 assert_eq!(x == 0 || 10 % x == 0 || x % 2 == 0, true);
