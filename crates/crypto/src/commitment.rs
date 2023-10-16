@@ -125,19 +125,19 @@ impl Secrets {
 
     pub fn parse(&self) -> Result<Vec<Vec<BigUint>>> {
         if self.0.len() < 2 {
-            return Err(CryptoError::secrets_too_small(self.0.len()));
+            return Err(CryptoError::secrets_too_few(self.0.len()));
         }
 
         let mut ss = self.0.clone();
         let mut parts = Vec::new();
-        loop {
-            if ss.is_empty() {
-                break;
-            }
+        while !ss.is_empty() {
             if parts.len() >= Self::PARTS_CAP {
-                return Err(CryptoError::too_many_commitment_parts(parts.len()));
+                return Err(CryptoError::too_many_commitment_parts(parts.len() + 1));
             }
-            let part_len = ss.remove(0).to_usize().unwrap();
+            let first = ss.remove(0);
+            let part_len = first
+                .to_usize()
+                .ok_or(CryptoError::secrets_invalid_part_length(first))?;
             if part_len > Self::MAX_PART_SIZE {
                 return Err(CryptoError::secrets_too_large(part_len));
             }
@@ -154,6 +154,17 @@ impl Secrets {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn to_vec<N>(parts: &[&[N]]) -> Vec<Vec<BigUint>>
+    where
+        N: Copy,
+        BigUint: From<N>,
+    {
+        parts
+            .into_iter()
+            .map(|ps| ps.into_iter().map(|p| BigUint::from(*p)).collect())
+            .collect()
+    }
 
     #[test]
     fn test_verify() {
@@ -186,10 +197,7 @@ mod tests {
     #[test]
     fn secrets_build_success() {
         let check = |parts: &[&[u8]], expected: &[u8]| {
-            let parts: Vec<Vec<BigUint>> = parts
-                .iter()
-                .map(|ps| ps.iter().map(|p| BigUint::from(*p)).collect())
-                .collect();
+            let parts = to_vec(parts);
             let parts: Vec<&[BigUint]> = parts.iter().map(|ps| ps.as_ref()).collect();
             let actual = Secrets::build(parts.as_ref()).unwrap();
             let expected: Vec<_> = expected.iter().map(|e| BigUint::from(*e)).collect();
@@ -218,10 +226,7 @@ mod tests {
             let secrets = Secrets(secrets);
             let actual = secrets.parse();
             assert_eq!(actual.clone().err(), None);
-            let expected: Vec<Vec<BigUint>> = expected
-                .iter()
-                .map(|es| es.iter().map(|e| BigUint::from(*e)).collect())
-                .collect();
+            let expected = to_vec(expected);
             assert_eq!(actual, Ok(expected));
         };
 
@@ -229,5 +234,21 @@ mod tests {
         check(&[1, 1, 1, 1], &[&[1], &[1]]);
         check(&[1, 1, 1, 2, 1, 3], &[&[1], &[2], &[3]]);
         check(&[1, 1, 2, 1, 2, 3, 1, 2, 3], &[&[1], &[1, 2], &[1, 2, 3]]);
+    }
+
+    #[test]
+    fn secrets_parse_failure() {
+        let check = |secrets: &[u8], err: CryptoError| {
+            let secrets: Vec<BigUint> = secrets.iter().map(|s| BigUint::from(*s)).collect();
+            let secrets = Secrets(secrets);
+            let actual = secrets.parse();
+            assert_eq!(actual, Err(err));
+        };
+
+        check(&[], CryptoError::secrets_too_few(0));
+        check(&[0], CryptoError::secrets_too_few(1));
+        check(&[0, 0, 0, 0], CryptoError::too_many_commitment_parts(4));
+        check(&[2, 0], CryptoError::secrets_invalid_part_length(2));
+        check(&[3, 1, 2], CryptoError::secrets_invalid_part_length(3));
     }
 }
