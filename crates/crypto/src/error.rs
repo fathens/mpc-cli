@@ -1,4 +1,5 @@
 use hmac::digest::InvalidLength;
+use std::fmt::Display;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CryptoError(String);
@@ -40,15 +41,15 @@ impl CryptoError {
         CryptoError(format!("Commitment part too large: {}", got))
     }
 
-    pub fn secrets_too_small(got: usize) -> CryptoError {
-        CryptoError(format!("Secrets too small: {}", got))
+    pub fn secrets_too_few(got: usize) -> CryptoError {
+        CryptoError(format!("Secrets too few: {}", got))
     }
 
     pub fn secrets_too_large(got: usize) -> CryptoError {
         CryptoError(format!("Secrets too large: {}", got))
     }
 
-    pub fn secrets_invalid_part_length(got: usize) -> CryptoError {
+    pub fn secrets_invalid_part_length<A: Display>(got: A) -> CryptoError {
         CryptoError(format!("Secrets invalid part length: {}", got))
     }
 }
