@@ -4,7 +4,6 @@ use crate::{CryptoError, Result};
 use bytes::Bytes;
 use common::mod_int::ModInt;
 use num_bigint::{BigUint, RandBigInt};
-use num_traits::{One, Zero};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Iterations([BigUint; Iterations::LENGTH]);
@@ -60,24 +59,26 @@ impl Proof {
         let mut msg = vec![h1.clone(), h2.clone(), n.clone()];
         alpha.values().iter().for_each(|a| msg.push(a.clone()));
         let c = hash_sha512_256i(msg.as_ref());
-        let t = randoms.convert(|v, i| {
-            let bi = if c.get_bit(i) {
-                BigUint::one()
+        let hash_bits = &BigUint::from_bytes_be(c.as_ref());
+        let t = randoms.convert(|r, i| {
+            if hash_bits.bit(i as u64) {
+                r.clone()
             } else {
-                BigUint::zero()
-            };
-            mod_qp.add(v, &mod_qp.mul(&bi, x))
+                mod_qp.add(r, x)
+            }
         });
         Proof { alpha, t }
     }
 
     pub fn unmarshal(bzs: &[Bytes]) -> Result<Self> {
-        let bis: Vec<_> = bzs.iter().map(|bs| BigUint::from_bytes_be(bs)).collect();
-        let secrets: Secrets = bis.into();
-        let parsed = secrets.parse()?;
-        if parsed.len() != 2 {
-            return Err(CryptoError::dln_proof_invalid_length(parsed.len()));
-        }
+        let parse = |bis: Vec<BigUint>| -> Result<[Vec<BigUint>; 2]> {
+            let secrets: Secrets = bis.into();
+            let parsed = secrets.parse()?;
+            parsed
+                .try_into()
+                .map_err(|org: Vec<Vec<BigUint>>| CryptoError::dln_proof_invalid_length(org.len()))
+        };
+        let [b0, b1] = parse(bzs.iter().map(|bs| BigUint::from_bytes_be(bs)).collect())?;
         let to_its = |bis: Vec<BigUint>| -> Result<Iterations> {
             let bs = bis
                 .clone()
@@ -86,8 +87,8 @@ impl Proof {
             Ok(Iterations(bs))
         };
         Ok(Proof {
-            alpha: to_its(parsed[0].clone())?,
-            t: to_its(parsed[1].clone())?,
+            alpha: to_its(b0)?,
+            t: to_its(b1)?,
         })
     }
 }
