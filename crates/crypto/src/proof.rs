@@ -91,12 +91,33 @@ impl Proof {
             t: to_its(b1)?,
         })
     }
+
+    pub fn marshal(&self) -> Result<Vec<Bytes>> {
+        let secrets = Secrets::build(&[self.alpha.values(), self.t.values()])?;
+        let bss = secrets
+            .to_vec()
+            .iter()
+            .map(|x| Bytes::from(x.to_bytes_be()))
+            .collect();
+        Ok(bss)
+    }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::proof::Proof;
+    use num_bigint::BigUint;
+
     #[test]
     fn unmarshal_success() {
-        assert!(true);
+        let sample = Proof::new(
+            (&BigUint::from(10123_u16), &BigUint::from(20123_u16)),
+            &BigUint::from(30123_u16),
+            (&BigUint::from(40123_u16), &BigUint::from(50123_u16)),
+            &BigUint::from(60123_u16),
+        );
+        let bzs = sample.marshal().unwrap();
+        let actual = Proof::unmarshal(&bzs).unwrap();
+        assert_eq!(actual, sample);
     }
 }
