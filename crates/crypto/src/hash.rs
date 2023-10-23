@@ -11,15 +11,6 @@ fixed_bytes!(Hash256);
 
 impl Hash256 {
     pub const BIT_LENGTH: u64 = 256;
-
-    pub fn get_bit(&self, i: u8) -> bool {
-        let byte_idx = i / 8;
-        let bit_idx = i % 8;
-        let mask = 1 << bit_idx;
-        let byte_idx = 31 - byte_idx;
-        let b = self.0[byte_idx as usize];
-        (b & mask) != 0
-    }
 }
 
 fn sha512_256(tag: Option<&[u8]>, src_list: &[&[u8]]) -> Hash256 {
