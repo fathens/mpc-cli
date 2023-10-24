@@ -47,15 +47,6 @@ pub struct Proof {
 }
 
 impl Proof {
-    fn mk_hash((h1, h2): (&BigUint, &BigUint), n: &BigUint, alpha: &Iterations) -> BigUint {
-        let mut msg = alpha.values().to_vec();
-        msg.insert(0, n.clone());
-        msg.insert(0, h2.clone());
-        msg.insert(0, h1.clone());
-        let c = hash_sha512_256i(msg.as_ref());
-        BigUint::from_bytes_be(c.as_ref())
-    }
-
     pub fn new(
         (h1, h2): (&BigUint, &BigUint),
         x: &BigUint,
@@ -66,7 +57,7 @@ impl Proof {
         let mod_qp = ModInt::new(&(p * q));
         let randoms = Iterations::gen_random(mod_qp.module());
         let alpha = randoms.convert(|_, r| mod_n.pow(h1, r));
-        let hash = &Self::mk_hash((h1, h2), n, &alpha);
+        let hash = &mk_hash((h1, h2), n, &alpha);
         let t = randoms.convert(|i, r| {
             if hash.bit(i as u64) {
                 mod_qp.add(r, x)
@@ -98,7 +89,7 @@ impl Proof {
         let one = &BigUint::one();
 
         let m = ModInt::new(n);
-        let hash = &Self::mk_hash((h1, h2), n, &self.alpha);
+        let hash = &mk_hash((h1, h2), n, &self.alpha);
         self.alpha
             .values()
             .iter()
@@ -151,9 +142,18 @@ impl Proof {
     }
 }
 
+fn mk_hash((h1, h2): (&BigUint, &BigUint), n: &BigUint, alpha: &Iterations) -> BigUint {
+    let mut msg = alpha.values().to_vec();
+    msg.insert(0, n.clone());
+    msg.insert(0, h2.clone());
+    msg.insert(0, h1.clone());
+    let c = hash_sha512_256i(msg.as_ref());
+    BigUint::from_bytes_be(c.as_ref())
+}
+
 #[cfg(test)]
 mod test {
-    use crate::proof::{Iterations, Proof};
+    use super::*;
     use num_bigint::BigUint;
     use serde_json::Value;
 
@@ -170,7 +170,7 @@ mod test {
     #[test]
     fn check_mk_hash() {
         let alpha = Iterations::generate(|i| BigUint::from(((i as u16) + 20) * 17));
-        let hash = Proof::mk_hash(
+        let hash = mk_hash(
             (&BigUint::from(50_u8), &BigUint::from(180_u8)),
             &BigUint::from(70_u8),
             &alpha,
