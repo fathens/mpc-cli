@@ -34,9 +34,9 @@ impl Iterations {
 
     fn convert<F>(&self, mut f: F) -> Self
     where
-        F: FnMut(&BigUint, u8) -> BigUint,
+        F: FnMut(u8, &BigUint) -> BigUint,
     {
-        Self::generate(|i| f(&self.0[i as usize], i))
+        Self::generate(|i| f(i, &self.0[i as usize]))
     }
 }
 
@@ -65,13 +65,13 @@ impl Proof {
         let mod_n = ModInt::new(n);
         let mod_qp = ModInt::new(&(p * q));
         let randoms = Iterations::gen_random(mod_qp.module());
-        let alpha = randoms.convert(|r, _| mod_n.pow(h1, r));
-        let hash_bits = &Self::mk_hash((h1, h2), n, &alpha);
-        let t = randoms.convert(|r, i| {
-            if hash_bits.bit(i as u64) {
-                mod_qp.add(r, &BigUint::zero())
-            } else {
+        let alpha = randoms.convert(|_, r| mod_n.pow(h1, r));
+        let hash = &Self::mk_hash((h1, h2), n, &alpha);
+        let t = randoms.convert(|i, r| {
+            if hash.bit(i as u64) {
                 mod_qp.add(r, x)
+            } else {
+                r.clone()
             }
         });
         Proof { alpha, t }
