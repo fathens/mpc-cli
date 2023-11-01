@@ -52,6 +52,11 @@ pub fn hash_sha512_256i_tagged(tag: &[u8], src_list: &[BigUint]) -> Hash256 {
     sha512_256i(Some(tag), src_list)
 }
 
+pub fn rejection_sample(q: &BigUint, hash: &Hash256) -> BigUint {
+    let eh = BigUint::from_bytes_be(hash.as_ref());
+    eh % q
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

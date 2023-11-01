@@ -4,6 +4,7 @@ use num_integer::Integer;
 use num_modular::ModularSymbols;
 use num_prime::nt_funcs::is_safe_prime;
 use num_traits::{One, Zero};
+use rand::rngs::ThreadRng;
 use std::ops::RangeInclusive;
 
 const RANDOM_BITS_RANGE: RangeInclusive<u64> = 1..=5000;
@@ -15,26 +16,23 @@ fn check_bits_range(bits: u64) -> Result<()> {
     Ok(())
 }
 
-pub fn get_random_int(bits: u64) -> Result<BigUint> {
+pub fn get_random_int(rnd: &mut ThreadRng, bits: u64) -> Result<BigUint> {
     check_bits_range(bits)?;
 
-    let mut rng = rand::thread_rng();
-    let r = rng.gen_biguint(bits);
+    let r = rnd.gen_biguint(bits);
     Ok(r)
 }
 
-pub fn get_random_positive_int(ceiling: &BigUint) -> Result<BigUint> {
+pub fn get_random_positive_int(rnd: &mut ThreadRng, ceiling: &BigUint) -> Result<BigUint> {
     check_bits_range(ceiling.bits())?;
 
-    let mut rng = rand::thread_rng();
-    let r = rng.gen_biguint_below(ceiling);
+    let r = rnd.gen_biguint_below(ceiling);
     Ok(r)
 }
 
-pub fn get_random_prime_int(bits: u64) -> Result<BigUint> {
+pub fn get_random_prime_int(rnd: &mut ThreadRng, bits: u64) -> Result<BigUint> {
     check_bits_range(bits)?;
 
-    let mut rnd = rand::thread_rng();
     let mut r = BigUint::zero();
     while r.is_zero() || !is_safe_prime(&r).probably() {
         r = rnd.gen_biguint(bits);
@@ -47,7 +45,10 @@ pub fn is_number_in_multiplicative_group(modulus: &BigUint, number: &BigUint) ->
     !number.is_zero() && number < modulus && number.gcd(modulus).is_one()
 }
 
-pub fn get_random_positive_relatively_prime_int(modulus: &BigUint) -> Result<BigUint> {
+pub fn get_random_positive_relatively_prime_int(
+    rnd: &mut ThreadRng,
+    modulus: &BigUint,
+) -> Result<BigUint> {
     if modulus.is_zero() {
         return Err(CommonError::invalid_argument(
             modulus,
@@ -57,18 +58,21 @@ pub fn get_random_positive_relatively_prime_int(modulus: &BigUint) -> Result<Big
 
     let mut r = BigUint::zero();
     while r.is_zero() || !is_number_in_multiplicative_group(modulus, &r) {
-        r = get_random_positive_int(modulus)?;
+        r = get_random_positive_int(rnd, modulus)?;
     }
     Ok(r)
 }
 
-pub fn get_random_generator_of_the_quadratic_residue(modulus: &BigUint) -> Result<BigUint> {
-    let f = get_random_positive_relatively_prime_int(modulus)?;
+pub fn get_random_generator_of_the_quadratic_residue(
+    rnd: &mut ThreadRng,
+    modulus: &BigUint,
+) -> Result<BigUint> {
+    let f = get_random_positive_relatively_prime_int(rnd, modulus)?;
     let fsq = f.sqrt();
     Ok(fsq % modulus)
 }
 
-pub fn get_random_quadratic_non_residue(modulus: &BigUint) -> Result<BigUint> {
+pub fn get_random_quadratic_non_residue(rnd: &mut ThreadRng, modulus: &BigUint) -> Result<BigUint> {
     if modulus.is_even() {
         Err(CommonError::invalid_argument(
             modulus,
@@ -78,7 +82,7 @@ pub fn get_random_quadratic_non_residue(modulus: &BigUint) -> Result<BigUint> {
 
     let mut r = BigUint::zero();
     while r.is_zero() || r.jacobi(modulus) >= 0 {
-        r = get_random_positive_int(modulus)?;
+        r = get_random_positive_int(rnd, modulus)?;
     }
     Ok(r)
 }
@@ -91,8 +95,9 @@ mod tests {
 
     #[test]
     fn get_random_int_success() {
-        let check = |bits: u64| {
-            let r = get_random_int(bits).unwrap();
+        let mut rnd = rand::thread_rng();
+        let mut check = |bits: u64| {
+            let r = get_random_int(&mut rnd, bits).unwrap();
             let ceiling = BigUint::one() << bits;
             assert_eq!(
                 true,
@@ -113,18 +118,21 @@ mod tests {
 
     #[test]
     fn get_random_int_failure() {
-        let err = get_random_int(0).unwrap_err();
+        let mut rnd = rand::thread_rng();
+
+        let err = get_random_int(&mut rnd, 0).unwrap_err();
         assert_eq!(CommonError::out_of_range(0, RANDOM_BITS_RANGE), err);
 
-        let err = get_random_int(5001).unwrap_err();
+        let err = get_random_int(&mut rnd, 5001).unwrap_err();
         assert_eq!(CommonError::out_of_range(5001, RANDOM_BITS_RANGE), err);
     }
 
     #[test]
     fn get_random_int_cap_success() {
-        let check = |ceiling_bits: u32| {
+        let mut rnd = rand::thread_rng();
+        let mut check = |ceiling_bits: u32| {
             let ceiling = BigUint::one() << ceiling_bits;
-            let r = get_random_positive_int(&ceiling).unwrap();
+            let r = get_random_positive_int(&mut rnd, &ceiling).unwrap();
             assert_eq!(true, r < ceiling);
         };
 
@@ -137,14 +145,16 @@ mod tests {
 
     #[test]
     fn get_random_int_cap_failure() {
-        let err = get_random_positive_int(&BigUint::zero()).unwrap_err();
+        let mut rnd = rand::thread_rng();
+        let err = get_random_positive_int(&mut rnd, &BigUint::zero()).unwrap_err();
         assert_eq!(CommonError::out_of_range(0, RANDOM_BITS_RANGE), err);
     }
 
     #[test]
     fn get_random_prime_int_success() {
-        let check = |bits: u64| {
-            let r = get_random_prime_int(bits).unwrap();
+        let mut rnd = rand::thread_rng();
+        let mut check = |bits: u64| {
+            let r = get_random_prime_int(&mut rnd, bits).unwrap();
             assert_eq!(
                 true,
                 r.bits() <= bits,
@@ -238,16 +248,18 @@ mod tests {
 
     #[test]
     fn get_random_positive_relatively_prime_int_success() {
+        let mut rnd = rand::thread_rng();
         for _ in 0..100 {
-            let modulus = get_random_int(1024).unwrap();
-            let r = get_random_positive_relatively_prime_int(&modulus).unwrap();
+            let modulus = get_random_int(&mut rnd, 1024).unwrap();
+            let r = get_random_positive_relatively_prime_int(&mut rnd, &modulus).unwrap();
             assert_eq!(true, is_number_in_multiplicative_group(&modulus, &r));
         }
     }
 
     #[test]
     fn get_random_positive_relatively_prime_int_failure() {
-        let err = get_random_positive_relatively_prime_int(&BigUint::zero()).unwrap_err();
+        let mut rnd = rand::thread_rng();
+        let err = get_random_positive_relatively_prime_int(&mut rnd, &BigUint::zero()).unwrap_err();
         assert_eq!(
             CommonError::invalid_argument(BigUint::zero(), "modulus must not be zero"),
             err
@@ -256,16 +268,19 @@ mod tests {
 
     #[test]
     fn get_random_generator_of_the_quadratic_residue_success() {
+        let mut rnd = rand::thread_rng();
         for _ in 0..100 {
-            let modulus = get_random_int(1024).unwrap();
-            let r = get_random_generator_of_the_quadratic_residue(&modulus).unwrap();
+            let modulus = get_random_int(&mut rnd, 1024).unwrap();
+            let r = get_random_generator_of_the_quadratic_residue(&mut rnd, &modulus).unwrap();
             assert_eq!(true, r < modulus);
         }
     }
 
     #[test]
     fn get_random_generator_of_the_quadratic_residue_failure() {
-        let err = get_random_generator_of_the_quadratic_residue(&BigUint::zero()).unwrap_err();
+        let mut rnd = rand::thread_rng();
+        let err =
+            get_random_generator_of_the_quadratic_residue(&mut rnd, &BigUint::zero()).unwrap_err();
         assert_eq!(
             CommonError::invalid_argument(BigUint::zero(), "modulus must not be zero"),
             err
@@ -274,10 +289,11 @@ mod tests {
 
     #[test]
     fn get_random_quadratic_non_residue_success() {
+        let mut rnd = rand::thread_rng();
         for _ in 0..100 {
-            let mut modulus = get_random_int(1024).unwrap();
+            let mut modulus = get_random_int(&mut rnd, 1024).unwrap();
             modulus.set_bit(0, true);
-            let r = get_random_quadratic_non_residue(&modulus).unwrap();
+            let r = get_random_quadratic_non_residue(&mut rnd, &modulus).unwrap();
             assert_eq!(true, r < modulus);
             assert_eq!(true, r.jacobi(&modulus) == -1);
         }
@@ -285,13 +301,15 @@ mod tests {
 
     #[test]
     fn get_random_quadratic_non_residue_failure() {
-        let err = get_random_quadratic_non_residue(&BigUint::zero()).unwrap_err();
+        let mut rnd = rand::thread_rng();
+
+        let err = get_random_quadratic_non_residue(&mut rnd, &BigUint::zero()).unwrap_err();
         assert_eq!(
             CommonError::invalid_argument(BigUint::zero(), "modulus must be odd"),
             err
         );
 
-        let err = get_random_quadratic_non_residue(&BigUint::from(128_u8)).unwrap_err();
+        let err = get_random_quadratic_non_residue(&mut rnd, &BigUint::from(128_u8)).unwrap_err();
         assert_eq!(
             CommonError::invalid_argument(BigUint::from(128_u8), "modulus must be odd"),
             err
