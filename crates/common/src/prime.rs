@@ -21,7 +21,7 @@ impl GermainSafePrime {
     }
 }
 
-mod safe_prime {
+pub mod safe_prime {
     use super::{miller_rabin, simple_check};
     use num_bigint::{BigUint, RandBigInt};
     use num_prime::{nt_funcs, PrimalityTestConfig};
@@ -32,12 +32,12 @@ mod safe_prime {
 
     const CONCURRENT_NUM: usize = 100;
 
-    fn is_prime(v: &BigUint) -> bool {
+    pub fn is_prime(v: &BigUint) -> bool {
         let config = PrimalityTestConfig::strict();
         nt_funcs::is_prime(v, Some(config)).probably()
     }
 
-    pub fn gen_qp(bits: u64) -> (BigUint, BigUint) {
+    pub(super) fn gen_qp(bits: u64) -> (BigUint, BigUint) {
         let mut rng = rand::thread_rng();
         let mut do_gen = || {
             let mut v = rng.gen_biguint(bits - 2);
