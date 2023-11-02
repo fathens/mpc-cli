@@ -1,4 +1,5 @@
 use crate::hash::{hash_sha512_256i_tagged, rejection_sample};
+use crate::utils::NTildei;
 use bytes::Bytes;
 use common::mod_int::ModInt;
 use common::random;
@@ -21,23 +22,21 @@ pub struct ProofFac {
 }
 
 pub struct VerifyParam {
+    pub session: Bytes,
     pub curve_n: BigUint,
     pub n0: BigUint,
-    pub n_cap: BigUint,
-    pub s: BigUint,
-    pub t: BigUint,
+    pub n_tildei: NTildei,
 }
 
 impl VerifyParam {
     pub fn mul_st(&self, m: &ModInt, ns: Option<&BigUint>, a: &BigUint, b: &BigUint) -> BigUint {
-        let x = m.pow(ns.unwrap_or(&self.s), a);
-        let y = m.pow(&self.t, b);
+        let x = m.pow(ns.unwrap_or(&self.n_tildei.v1), a);
+        let y = m.pow(&self.n_tildei.v2, b);
         m.mul(&x, &y)
     }
 
     pub fn e_hash(
         &self,
-        session: &Bytes,
         p: &BigUint,
         q: &BigUint,
         a: &BigUint,
@@ -47,9 +46,9 @@ impl VerifyParam {
     ) -> BigUint {
         let list = [
             self.n0.clone(),
-            self.n_cap.clone(),
-            self.s.clone(),
-            self.t.clone(),
+            self.n_tildei.n.clone(),
+            self.n_tildei.v1.clone(),
+            self.n_tildei.v2.clone(),
             p.clone(),
             q.clone(),
             a.clone(),
@@ -57,7 +56,7 @@ impl VerifyParam {
             t.clone(),
             sigma.clone(),
         ];
-        let eh = hash_sha512_256i_tagged(session, &list);
+        let eh = hash_sha512_256i_tagged(&self.session, &list);
         rejection_sample(&self.curve_n, &eh)
     }
 }
@@ -66,13 +65,12 @@ impl ProofFac {
     const SIZE: usize = 11;
 
     pub fn new(
-        session: &Bytes,
         vp: &VerifyParam,
         n0p: &BigUint,
         n0q: &BigUint,
     ) -> Result<Self, common::CommonError> {
         let q3 = &vp.curve_n.pow(3);
-        let ncap = &vp.n_cap;
+        let ncap = &vp.n_tildei.n;
         let q_ncap = &(&vp.curve_n * ncap);
         let n0 = &vp.n0;
         let q_n0_ncap = &(q_ncap * n0);
@@ -101,7 +99,7 @@ impl ProofFac {
         let t = vp.mul_st(m, Some(&q), alpha, r);
 
         // Fig 28.2 e
-        let e = &vp.e_hash(session, &p, &q, &a, &b, &t, &sigma);
+        let e = &vp.e_hash(&p, &q, &a, &b, &t, &sigma);
 
         // Fig 28.3
         let z1 = e * n0p + alpha;
@@ -127,7 +125,7 @@ impl ProofFac {
         })
     }
 
-    pub fn verify(&self, session: &Bytes, vp: &VerifyParam) -> bool {
+    pub fn verify(&self, vp: &VerifyParam) -> bool {
         let q3 = &vp.curve_n.pow(3);
         let sqrt_n0 = vp.n0.sqrt();
         let q3_sqrt_n0 = &(q3 * &sqrt_n0);
@@ -140,18 +138,10 @@ impl ProofFac {
             return false;
         }
 
-        let e = &vp.e_hash(
-            session,
-            &self.p,
-            &self.q,
-            &self.a,
-            &self.b,
-            &self.t,
-            &self.sigma,
-        );
+        let e = &vp.e_hash(&self.p, &self.q, &self.a, &self.b, &self.t, &self.sigma);
 
         // Fig 28. Equality Check
-        let m = &ModInt::new(&vp.n_cap);
+        let m = &ModInt::new(&vp.n_tildei.n);
         {
             let a = vp.mul_st(m, None, &self.z1, &self.w1);
             let b = m.mul(&self.a, &m.pow(&self.p, e));
@@ -168,17 +158,17 @@ impl ProofFac {
             }
         }
 
-        {
+        if let Ok(y) = m.powi(&vp.n_tildei.v2, &self.v) {
             let x = m.pow(&self.q, &self.z1);
-            let mi = m.module().to_bigint().unwrap();
-            let y = vp.t.to_bigint().unwrap().modpow(&self.v, &mi);
-            let a = (x.to_bigint().unwrap() * &y) % &mi;
+            let a = m.mul(&x, &y);
 
             let r = vp.mul_st(m, None, &vp.n0, &self.sigma);
             let b = m.mul(&self.t, &m.pow(&r, e));
-            if a != b.to_bigint().unwrap() {
+            if a != b {
                 return false;
             }
+        } else {
+            return false;
         }
 
         return true;
@@ -230,38 +220,59 @@ impl Into<[Bytes; ProofFac::SIZE]> for ProofFac {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::random::get_random_prime_int;
+    use crypto_bigint::Encoding;
+    use k256::Secp256k1;
+    use num_traits::ToPrimitive;
+    use rand::rngs::ThreadRng;
+
+    const BIT_SIZE: u64 = 128;
+
+    fn gen_proof_fac(rnd: &mut ThreadRng) -> (VerifyParam, (BigUint, BigUint)) {
+        let n_tildei = NTildei::generate(
+            get_random_prime_int(rnd, BIT_SIZE).unwrap(),
+            get_random_prime_int(rnd, BIT_SIZE).unwrap(),
+        )
+        .unwrap();
+
+        let n0p = get_random_prime_int(rnd, BIT_SIZE).unwrap();
+        let n0q = get_random_prime_int(rnd, BIT_SIZE).unwrap();
+        let n0 = &n0p * &n0q;
+
+        let bs: Vec<_> = (0..rnd.gen_biguint(8).to_u8().unwrap())
+            .flat_map(|_| rnd.gen_biguint(8).to_bytes_be())
+            .collect();
+
+        let curve_n = elliptic_curve::ScalarPrimitive::<Secp256k1>::MODULUS.to_be_bytes();
+
+        let vp = VerifyParam {
+            session: bs.into(),
+            curve_n: BigUint::from_bytes_be(&curve_n),
+            n0,
+            n_tildei,
+        };
+
+        (vp, (n0p, n0q))
+    }
 
     #[test]
     fn proof_fac_verify() {
-        let vp = VerifyParam {
-            curve_n: BigUint::from(2_u8),
-            n0: BigUint::from(3_u8),
-            n_cap: BigUint::from(4_u8),
-            s: BigUint::from(5_u8),
-            t: BigUint::from(6_u8),
-        };
-        let session = BigUint::from(1_u8).to_bytes_be().into();
-
-        let sample =
-            ProofFac::new(&session, &vp, &BigUint::from(10_u8), &BigUint::from(11_u8)).unwrap();
-
-        let ok = sample.verify(&session, &vp);
-        assert!(ok);
+        let mut rnd = rand::thread_rng();
+        for _ in 0..8 {
+            let (vp, (n0q, n0p)) = gen_proof_fac(&mut rnd);
+            for _ in 0..8 {
+                let sample = ProofFac::new(&vp, &n0p, &n0q).unwrap();
+                let ok = sample.verify(&vp);
+                assert!(ok);
+            }
+        }
     }
 
     #[test]
     fn proof_fac_bytes() {
-        let vp = VerifyParam {
-            curve_n: BigUint::from(12_u8),
-            n0: BigUint::from(13_u8),
-            n_cap: BigUint::from(14_u8),
-            s: BigUint::from(15_u8),
-            t: BigUint::from(16_u8),
-        };
-        let session = BigUint::from(11_u8).to_bytes_be().into();
-
-        let sample =
-            ProofFac::new(&session, &vp, &BigUint::from(20_u8), &BigUint::from(21_u8)).unwrap();
+        let mut rnd = rand::thread_rng();
+        let (vp, (n0q, n0p)) = gen_proof_fac(&mut rnd);
+        let sample = ProofFac::new(&vp, &n0p, &n0q).unwrap();
 
         let bytes: [Bytes; ProofFac::SIZE] = sample.clone().into();
         let sample2 = ProofFac::try_from(bytes).unwrap();
