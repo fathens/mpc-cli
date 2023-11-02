@@ -1,3 +1,5 @@
+use core::fmt;
+use core::fmt::{Debug, Display};
 use std::ops::RangeInclusive;
 
 #[derive(Debug, PartialEq)]
@@ -14,7 +16,7 @@ impl CommonError {
 
     pub fn out_of_range<N>(value: N, range: RangeInclusive<N>) -> CommonError
     where
-        N: std::fmt::Display + std::fmt::Debug,
+        N: Display + Debug,
     {
         let msg = format!("Out of range: given {value} not in {range:?}",);
         CommonError(msg)
@@ -22,9 +24,15 @@ impl CommonError {
 
     pub fn invalid_argument<A>(value: A, msg: &str) -> CommonError
     where
-        A: std::fmt::Display + std::fmt::Debug,
+        A: Display + Debug,
     {
         let msg = format!("Invalid argument: {value}: {msg}",);
         CommonError(msg)
+    }
+}
+
+impl Display for CommonError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("crypto error")
     }
 }
