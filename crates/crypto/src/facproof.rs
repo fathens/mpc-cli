@@ -2,6 +2,7 @@ use crate::hash::{hash_sha512_256i_tagged, rejection_sample};
 use bytes::Bytes;
 use common::mod_int::ModInt;
 use common::random;
+use common::slice::is_non_empty_all;
 use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -62,6 +63,8 @@ impl VerifyParam {
 }
 
 impl ProofFac {
+    const SIZE: usize = 11;
+
     pub fn new(
         session: &Bytes,
         vp: &VerifyParam,
@@ -182,6 +185,48 @@ impl ProofFac {
     }
 }
 
+impl TryFrom<[Bytes; ProofFac::SIZE]> for ProofFac {
+    type Error = common::CommonError;
+
+    fn try_from(values: [Bytes; ProofFac::SIZE]) -> Result<Self, Self::Error> {
+        if !is_non_empty_all(&values) {
+            return Err(common::CommonError::wrong_length_bytes());
+        }
+        let r = Self {
+            p: BigUint::from_bytes_be(&values[0]),
+            q: BigUint::from_bytes_be(&values[1]),
+            a: BigUint::from_bytes_be(&values[2]),
+            b: BigUint::from_bytes_be(&values[3]),
+            t: BigUint::from_bytes_be(&values[4]),
+            sigma: BigUint::from_bytes_be(&values[5]),
+            z1: BigUint::from_bytes_be(&values[6]),
+            z2: BigUint::from_bytes_be(&values[7]),
+            w1: BigUint::from_bytes_be(&values[8]),
+            w2: BigUint::from_bytes_be(&values[9]),
+            v: BigInt::from_signed_bytes_be(&values[10]),
+        };
+        Ok(r)
+    }
+}
+
+impl Into<[Bytes; ProofFac::SIZE]> for ProofFac {
+    fn into(self) -> [Bytes; ProofFac::SIZE] {
+        [
+            self.p.to_bytes_be().into(),
+            self.q.to_bytes_be().into(),
+            self.a.to_bytes_be().into(),
+            self.b.to_bytes_be().into(),
+            self.t.to_bytes_be().into(),
+            self.sigma.to_bytes_be().into(),
+            self.z1.to_bytes_be().into(),
+            self.z2.to_bytes_be().into(),
+            self.w1.to_bytes_be().into(),
+            self.w2.to_bytes_be().into(),
+            self.v.to_signed_bytes_be().into(),
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +247,24 @@ mod tests {
 
         let ok = sample.verify(&session, &vp);
         assert!(ok);
+    }
+
+    #[test]
+    fn proof_fac_bytes() {
+        let vp = VerifyParam {
+            curve_n: BigUint::from(12_u8),
+            n0: BigUint::from(13_u8),
+            n_cap: BigUint::from(14_u8),
+            s: BigUint::from(15_u8),
+            t: BigUint::from(16_u8),
+        };
+        let session = BigUint::from(11_u8).to_bytes_be().into();
+
+        let sample =
+            ProofFac::new(&session, &vp, &BigUint::from(20_u8), &BigUint::from(21_u8)).unwrap();
+
+        let bytes: [Bytes; ProofFac::SIZE] = sample.clone().into();
+        let sample2 = ProofFac::try_from(bytes).unwrap();
+        assert_eq!(sample, sample2);
     }
 }
