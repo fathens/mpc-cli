@@ -1,5 +1,7 @@
+use common::CommonError;
+use core::fmt;
+use core::fmt::Display;
 use hmac::digest::InvalidLength;
-use std::fmt::Display;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CryptoError(String);
@@ -56,6 +58,16 @@ impl CryptoError {
     pub fn dln_proof_invalid_length<A: Display>(got: A) -> CryptoError {
         CryptoError(format!("DLN proof invalid length: {}", got))
     }
+
+    pub fn need_primes() -> CryptoError {
+        CryptoError("Need primes".to_owned())
+    }
+}
+
+impl Display for CryptoError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("crypto error")
+    }
 }
 
 impl From<InvalidLength> for CryptoError {
@@ -65,6 +77,12 @@ impl From<InvalidLength> for CryptoError {
 }
 impl From<elliptic_curve::Error> for CryptoError {
     fn from(src: elliptic_curve::Error) -> Self {
+        Self(src.to_string())
+    }
+}
+
+impl From<CommonError> for CryptoError {
+    fn from(src: CommonError) -> Self {
         Self(src.to_string())
     }
 }
