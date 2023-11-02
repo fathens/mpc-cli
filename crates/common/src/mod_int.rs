@@ -1,7 +1,7 @@
 use crate::{CommonError, Result};
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint};
 use num_modular::{ModularCoreOps, ModularPow, ModularUnaryOps};
-use num_traits::Zero;
+use num_traits::{Signed, Zero};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ModInt(BigUint);
@@ -38,6 +38,17 @@ impl ModInt {
 
     pub fn pow(&self, x: &BigUint, y: &BigUint) -> BigUint {
         x.powm(y, &self.0)
+    }
+
+    pub fn powi(&self, x: &BigUint, y: &BigInt) -> Result<BigUint> {
+        if y.is_negative() {
+            let y = y.abs();
+            let r = self.pow(x, &y.to_biguint().unwrap());
+            let r = self.mod_inverse(&r)?;
+            Ok(r)
+        } else {
+            Ok(self.pow(x, &y.to_biguint().unwrap()))
+        }
     }
 
     pub fn mod_inverse(&self, x: &BigUint) -> Result<BigUint> {
@@ -132,6 +143,57 @@ mod tests {
         check(9, 3, 9);
         check(2, 3, 8);
         check(11, 1, 1);
+    }
+
+    #[test]
+    fn mod_int_powi_positive() {
+        let m = ModInt(BigUint::from(10u32));
+        let check = |x: u32, y: i32, expected: u32| {
+            let a = m.powi(&BigUint::from(x), &BigInt::from(y));
+            assert_eq!(a.unwrap(), BigUint::from(expected));
+        };
+        check(7, 1, 7);
+        check(7, 2, 9);
+        check(9, 3, 9);
+        check(2, 3, 8);
+        check(11, 1, 1);
+    }
+
+    #[test]
+    fn mod_int_powi_negative() {
+        let m = ModInt(BigUint::from(10u32));
+        let check = |x: u32, y: i32| {
+            let a = m.powi(&BigUint::from(x), &BigInt::from(y)).unwrap();
+            let b = &a * x.pow(-y as u32) % m.module();
+            assert_eq!(b, BigUint::one());
+        };
+        check(7, -1);
+        check(7, -2);
+        check(9, -3);
+        check(11, -1);
+    }
+
+    #[test]
+    fn mod_int_powi_zero() {
+        let m = ModInt(BigUint::from(10u32));
+        let check = |x: u32| {
+            let a = m.powi(&BigUint::from(x), &BigInt::from(0)).unwrap();
+            assert_eq!(a, BigUint::one());
+        };
+        check(7);
+        check(9);
+        check(2);
+        check(11);
+    }
+
+    #[test]
+    fn mod_int_powi_failure() {
+        let m = ModInt(BigUint::from(10u32));
+        let check = |x: u32, y: i32| {
+            let a = m.powi(&BigUint::from(x), &BigInt::from(y));
+            assert_eq!(a.is_err(), true);
+        };
+        check(2, -3);
     }
 
     #[test]
