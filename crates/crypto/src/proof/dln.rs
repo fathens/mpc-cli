@@ -1,44 +1,14 @@
 use crate::commitment::Secrets;
 use crate::hash::hash_sha512_256i;
+use crate::proof::iterations::{convert, gen_random};
 use crate::{CryptoError, Result};
 use bytes::Bytes;
 use common::mod_int::ModInt;
-use num_bigint::{BigUint, RandBigInt};
+use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Iterations([BigUint; Iterations::LENGTH]);
-
-impl Iterations {
-    const LENGTH: usize = 128;
-
-    fn values(&self) -> &[BigUint; Self::LENGTH] {
-        &self.0
-    }
-
-    fn generate<F>(mut f: F) -> Self
-    where
-        F: FnMut(u8) -> BigUint,
-    {
-        let mut bs = Vec::with_capacity(Self::LENGTH);
-        for i in 0..Self::LENGTH {
-            bs.push(f(i as u8));
-        }
-        Self(bs.try_into().unwrap())
-    }
-
-    fn gen_random(ceiling: &BigUint) -> Self {
-        let mut rng = rand::thread_rng();
-        Self::generate(|_| rng.gen_biguint_below(ceiling))
-    }
-
-    fn convert<F>(&self, mut f: F) -> Self
-    where
-        F: FnMut(u8, &BigUint) -> BigUint,
-    {
-        Self::generate(|i| f(i, &self.0[i as usize]))
-    }
-}
+pub struct Iterations([BigUint; 128]);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Proof {
@@ -55,16 +25,17 @@ impl Proof {
     ) -> Proof {
         let mod_n = ModInt::new(n);
         let mod_qp = ModInt::new(&(p * q));
-        let randoms = Iterations::gen_random(mod_qp.module());
-        let alpha = randoms.convert(|_, r| mod_n.pow(h1, r));
+        let mut rnd = rand::thread_rng();
+        let randoms = Iterations(gen_random(&mut rnd, mod_qp.module()));
+        let alpha = Iterations(convert(&randoms.0, |_, r| mod_n.pow(h1, r)));
         let hash = &mk_hash((h1, h2), n, &alpha);
-        let t = randoms.convert(|i, r| {
+        let t = Iterations(convert(&randoms.0, |i, r| {
             if hash.bit(i as u64) {
                 mod_qp.add(r, x)
             } else {
                 r.clone()
             }
-        });
+        }));
         Proof { alpha, t }
     }
 
@@ -91,9 +62,9 @@ impl Proof {
         let m = ModInt::new(n);
         let hash = &mk_hash((h1, h2), n, &self.alpha);
         self.alpha
-            .values()
+            .0
             .iter()
-            .zip(self.t.values())
+            .zip(&self.t.0)
             .enumerate()
             .all(|(i, (a, t))| {
                 if is_zero_or_one(&(t % n)) {
@@ -110,7 +81,7 @@ impl Proof {
     }
 
     pub fn marshal(&self) -> Result<Vec<Bytes>> {
-        let secrets = Secrets::build(&[self.alpha.values(), self.t.values()])?;
+        let secrets = Secrets::build(&[&self.alpha.0, &self.t.0])?;
         let bss = secrets
             .to_vec()
             .iter()
@@ -143,7 +114,7 @@ impl Proof {
 }
 
 fn mk_hash((h1, h2): (&BigUint, &BigUint), n: &BigUint, alpha: &Iterations) -> BigUint {
-    let mut msg = alpha.values().to_vec();
+    let mut msg = alpha.0.to_vec();
     msg.insert(0, n.clone());
     msg.insert(0, h2.clone());
     msg.insert(0, h1.clone());
@@ -154,6 +125,7 @@ fn mk_hash((h1, h2): (&BigUint, &BigUint), n: &BigUint, alpha: &Iterations) -> B
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::proof::iterations::generate;
     use num_bigint::BigUint;
     use serde_json::Value;
 
@@ -169,7 +141,7 @@ mod test {
 
     #[test]
     fn check_mk_hash() {
-        let alpha = Iterations::generate(|i| BigUint::from(((i as u16) + 20) * 17));
+        let alpha = Iterations(generate(|i| BigUint::from(((i as u16) + 20) * 17)));
         let hash = mk_hash(
             (&BigUint::from(50_u8), &BigUint::from(180_u8)),
             &BigUint::from(70_u8),
