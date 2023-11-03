@@ -5,7 +5,7 @@ use bytes::Bytes;
 use common::mod_int::ModInt;
 use common::prime::miller_rabin::is_prime;
 use common::random::get_random_quadratic_non_residue;
-use crypto_bigint::Pow;
+use common::slice::is_non_empty_all;
 use num_bigint::BigUint;
 use num_modular::ModularSymbols;
 use num_traits::{One, Zero};
@@ -13,8 +13,13 @@ use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Iterations([BigUint; 80]);
+pub struct Iterations([BigUint; Self::SIZE]);
 
+impl Iterations {
+    const SIZE: usize = 80;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ProofMod {
     w: BigUint,
     x: Iterations,
@@ -24,13 +29,15 @@ pub struct ProofMod {
 }
 
 impl ProofMod {
+    const SIZE: usize = Iterations::SIZE * 2 + 3;
+
     fn is_quadratic_residue(a: &BigUint, b: &BigUint) -> bool {
         a.jacobi(b) < 0
     }
 
     fn mk_ys(session: &Bytes, n: &BigUint, w: &BigUint) -> Iterations {
         let mut ys = vec![w.clone(), n.clone()];
-        Iterations(generate(|i| {
+        Iterations(generate(|_| {
             let ei = hash_sha512_256i_tagged(session.as_ref(), &ys);
             let v = rejection_sample(n, &ei);
             ys.push(v.clone());
@@ -54,8 +61,8 @@ impl ProofMod {
         let inv_n = mod_phi.mod_inverse(n).map_err(CryptoError::from)?;
 
         // Fix bitLen of A and B
-        let mut a = BigUint::one() << y.0.len();
-        let mut b = BigUint::one() << y.0.len();
+        let mut a = BigUint::one() << Iterations::SIZE;
+        let mut b = BigUint::one() << Iterations::SIZE;
 
         // for fourth-root
         let expo = {
@@ -63,7 +70,7 @@ impl ProofMod {
             mod_phi.mul(&a, &a)
         };
 
-        let mut zs = Vec::with_capacity(y.0.len());
+        let mut zs = Vec::with_capacity(Iterations::SIZE);
         let x = Iterations(convert(&y.0, |i, yi| {
             for j in 0..4 {
                 let _a = j & 1;
@@ -107,10 +114,10 @@ impl ProofMod {
         if self.x.0.iter().any(|v| v < n) {
             return false;
         }
-        if self.a.bits() as usize != self.x.0.len() + 1 {
+        if self.a.bits() as usize != Iterations::SIZE + 1 {
             return false;
         }
-        if self.b.bits() as usize != self.x.0.len() + 1 {
+        if self.b.bits() as usize != Iterations::SIZE + 1 {
             return false;
         }
 
@@ -122,7 +129,7 @@ impl ProofMod {
         let four = BigUint::from(4_u8);
         let mod_n = ModInt::new(n);
         let y = Self::mk_ys(session, n, &self.w);
-        (0..y.0.len()).into_par_iter().all(|i| {
+        (0..Iterations::SIZE).into_par_iter().all(|i| {
             let xi = &self.x.0[i];
             let yi = &y.0[i];
             let zi = &self.z.0[i];
@@ -147,29 +154,69 @@ impl ProofMod {
     }
 }
 
+impl Into<[Bytes; ProofMod::SIZE]> for ProofMod {
+    fn into(self) -> [Bytes; ProofMod::SIZE] {
+        let mut bss: Vec<Bytes> = Vec::with_capacity(ProofMod::SIZE);
+        bss.push(self.w.to_bytes_be().into());
+        (self.x.0)
+            .into_iter()
+            .for_each(|v| bss.push(v.to_bytes_be().into()));
+        bss.push(self.a.to_bytes_be().into());
+        bss.push(self.b.to_bytes_be().into());
+        (self.z.0)
+            .into_iter()
+            .for_each(|v| bss.push(v.to_bytes_be().into()));
+        bss.try_into().unwrap()
+    }
+}
+
+impl TryFrom<[Bytes; ProofMod::SIZE]> for ProofMod {
+    type Error = common::CommonError;
+
+    fn try_from(values: [Bytes; ProofMod::SIZE]) -> core::result::Result<Self, Self::Error> {
+        if !is_non_empty_all(&values) {
+            return Err(common::CommonError::wrong_length_bytes());
+        }
+        let w = BigUint::from_bytes_be(&values[0]);
+        let x = Iterations(
+            values[1..81]
+                .iter()
+                .map(|v| BigUint::from_bytes_be(v))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+        );
+        let a = BigUint::from_bytes_be(&values[81]);
+        let b = BigUint::from_bytes_be(&values[82]);
+        let z = Iterations(
+            values[83..163]
+                .iter()
+                .map(|v| BigUint::from_bytes_be(v))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+        );
+        Ok(Self { w, x, a, b, z })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Result;
-    use bytes::Bytes;
-    use num_bigint::BigUint;
-    use num_modular::ModularSymbols;
-    use num_traits::One;
+    use common::random::get_random_prime_int;
+
+    const BIT_SIZE: usize = 128;
 
     #[test]
-    fn test_is_quadratic_residue() {
-        let a = BigUint::from(2_u8);
-        let b = BigUint::from(3_u8);
-        assert!(ProofMod::is_quadratic_residue(&a, &b));
-    }
-
-    #[test]
-    fn test_new() -> Result<()> {
-        let session = Bytes::from_static(b"session");
-        let n = BigUint::from(2_u8);
-        let p = BigUint::from(3_u8);
-        let q = BigUint::from(5_u8);
-        let proof = ProofMod::new(&session, &n, &p, &q);
-        Ok(())
+    fn proof_mod_bytes() {
+        let mut rnd = rand::thread_rng();
+        let p = get_random_prime_int(&mut rnd, BIT_SIZE as u64).unwrap();
+        let q = get_random_prime_int(&mut rnd, BIT_SIZE as u64).unwrap();
+        let n = get_random_prime_int(&mut rnd, BIT_SIZE as u64).unwrap();
+        let session = Bytes::from_static(b"test");
+        let proof = ProofMod::new(&session, &n, &p, &q).unwrap();
+        let bytes: [Bytes; ProofMod::SIZE] = proof.clone().into();
+        let proof2 = ProofMod::try_from(bytes).unwrap();
+        assert_eq!(proof, proof2);
     }
 }
