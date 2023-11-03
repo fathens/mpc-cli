@@ -1,4 +1,4 @@
-use crate::hash::{hash_sha512_256i_tagged, rejection_sample};
+use crate::hash::hash_sha512_256i_tagged;
 use crate::proof::iterations::{convert, generate};
 use crate::{CryptoError, Result};
 use bytes::Bytes;
@@ -39,7 +39,7 @@ impl ProofMod {
         let mut ys = vec![w.clone(), n.clone()];
         Iterations(generate(|_| {
             let ei = hash_sha512_256i_tagged(session.as_ref(), &ys);
-            let v = rejection_sample(n, &ei);
+            let v = ei.rejection_sample(n);
             ys.push(v.clone());
             v
         }))

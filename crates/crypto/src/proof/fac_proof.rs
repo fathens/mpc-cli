@@ -1,4 +1,4 @@
-use crate::hash::{hash_sha512_256i_tagged, rejection_sample};
+use crate::hash::hash_sha512_256i_tagged;
 use crate::utils::NTildei;
 use bytes::Bytes;
 use common::mod_int::ModInt;
@@ -57,7 +57,7 @@ impl VerifyParam {
             sigma.clone(),
         ];
         let eh = hash_sha512_256i_tagged(&self.session, &list);
-        rejection_sample(&self.curve_n, &eh)
+        eh.rejection_sample(&self.curve_n)
     }
 }
 

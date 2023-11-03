@@ -11,6 +11,11 @@ fixed_bytes!(Hash256);
 
 impl Hash256 {
     pub const BIT_LENGTH: u64 = 256;
+
+    pub fn rejection_sample(&self, q: &BigUint) -> BigUint {
+        let eh = BigUint::from_bytes_be(self.as_ref());
+        eh % q
+    }
 }
 
 fn sha512_256(tag: Option<&[u8]>, src_list: &[&[u8]]) -> Hash256 {
@@ -52,15 +57,9 @@ pub fn hash_sha512_256i_tagged(tag: &[u8], src_list: &[BigUint]) -> Hash256 {
     sha512_256i(Some(tag), src_list)
 }
 
-pub fn rejection_sample(q: &BigUint, hash: &Hash256) -> BigUint {
-    let eh = BigUint::from_bytes_be(hash.as_ref());
-    eh % q
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num_integer::Integer;
     use num_traits::ToPrimitive;
 
     #[test]
@@ -157,12 +156,7 @@ mod tests {
     fn test_rejection_sample() {
         let q = BigUint::from(16_u8);
         let hash = hash_sha512_256(&["hello".as_bytes(), "world".as_bytes()]);
-        let x = rejection_sample(q, hash);
+        let x = hash.rejection_sample(&q);
         assert_eq!(Some(4_u64), x.to_u64());
-    }
-
-    fn rejection_sample(q: BigUint, hash: Hash256) -> BigUint {
-        let x = BigUint::from_bytes_be(hash.as_ref());
-        x.mod_floor(&q)
     }
 }
