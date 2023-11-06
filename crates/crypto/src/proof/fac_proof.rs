@@ -90,7 +90,7 @@ impl ProofFac {
         let y = &rnd.gen_biguint_below(q3_ncap);
 
         // Fig 28.1 compute
-        let m = &ModInt::new(&ncap);
+        let m = &ModInt::new(ncap);
 
         let p = vp.mul_st(m, None, n0p, mu);
         let q = vp.mul_st(m, None, n0q, nu);
@@ -171,7 +171,7 @@ impl ProofFac {
             return false;
         }
 
-        return true;
+        true
     }
 }
 
@@ -199,20 +199,20 @@ impl TryFrom<[Bytes; ProofFac::SIZE]> for ProofFac {
     }
 }
 
-impl Into<[Bytes; ProofFac::SIZE]> for ProofFac {
-    fn into(self) -> [Bytes; ProofFac::SIZE] {
+impl From<ProofFac> for [Bytes; ProofFac::SIZE] {
+    fn from(val: ProofFac) -> Self {
         [
-            self.p.to_bytes_be().into(),
-            self.q.to_bytes_be().into(),
-            self.a.to_bytes_be().into(),
-            self.b.to_bytes_be().into(),
-            self.t.to_bytes_be().into(),
-            self.sigma.to_bytes_be().into(),
-            self.z1.to_bytes_be().into(),
-            self.z2.to_bytes_be().into(),
-            self.w1.to_bytes_be().into(),
-            self.w2.to_bytes_be().into(),
-            self.v.to_signed_bytes_be().into(),
+            val.p.to_bytes_be().into(),
+            val.q.to_bytes_be().into(),
+            val.a.to_bytes_be().into(),
+            val.b.to_bytes_be().into(),
+            val.t.to_bytes_be().into(),
+            val.sigma.to_bytes_be().into(),
+            val.z1.to_bytes_be().into(),
+            val.z2.to_bytes_be().into(),
+            val.w1.to_bytes_be().into(),
+            val.w2.to_bytes_be().into(),
+            val.v.to_signed_bytes_be().into(),
         ]
     }
 }

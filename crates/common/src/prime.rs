@@ -60,7 +60,7 @@ pub mod safe_prime {
         };
 
         loop {
-            let trials: Vec<_> = repeat_with(|| do_gen()).take(CONCURRENT_NUM).collect();
+            let trials: Vec<_> = repeat_with(&mut do_gen).take(CONCURRENT_NUM).collect();
             if let Some((q, p)) = trials.par_iter().filter_map(with_delta).find_any(check) {
                 return (q, p);
             }
@@ -94,7 +94,7 @@ pub mod simple_check {
 
     const SMALL_PRIMES: [u8; 15] = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53];
 
-    const SMALL_PRIMES_PRODUCT: Lazy<BigUint> = Lazy::new(|| {
+    static SMALL_PRIMES_PRODUCT: Lazy<BigUint> = Lazy::new(|| {
         SMALL_PRIMES
             .iter()
             .fold(1_u128, |acc, p| acc * (*p as u128))
@@ -126,7 +126,6 @@ pub mod miller_rabin {
 
         let mut rng = rand::thread_rng();
         let samples: Vec<_> = (1..=reps)
-            .into_iter()
             .map(|idx| {
                 if idx == reps {
                     BigUint::from(2_u8)

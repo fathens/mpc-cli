@@ -3,7 +3,7 @@ use num_bigint::BigUint;
 use num_traits::Zero;
 use sha2::{Digest, Sha512_256};
 
-const HASH_INPUT_DELIMITER: [u8; 1] = ['$' as u8];
+const HASH_INPUT_DELIMITER: [u8; 1] = [b'$'];
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Hash256([u8; 32]);
@@ -26,12 +26,12 @@ fn sha512_256(tag: Option<&[u8]>, src_list: &[&[u8]]) -> Hash256 {
         hasher.update(hashed_tag);
     }
     let in_len_bz = (src_list.len() as u64).to_le_bytes();
-    hasher.update(&in_len_bz);
+    hasher.update(in_len_bz);
     for src in src_list {
         let len64 = (src.len() as u64).to_le_bytes();
         hasher.update(src);
-        hasher.update(&HASH_INPUT_DELIMITER);
-        hasher.update(&len64);
+        hasher.update(HASH_INPUT_DELIMITER);
+        hasher.update(len64);
     }
     Hash256(hasher.finalize().into())
 }

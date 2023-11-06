@@ -64,10 +64,7 @@ impl FromStr for HDPath {
 }
 
 fn split(s: &str) -> Result<Vec<Node>, <Node as FromStr>::Err> {
-    s.split(PATH_SEPARATOR)
-        .into_iter()
-        .map(Node::from_str)
-        .collect()
+    s.split(PATH_SEPARATOR).map(Node::from_str).collect()
 }
 
 #[cfg(test)]
