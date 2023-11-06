@@ -23,9 +23,6 @@ jobs:
           reporter: 'github-pr-review'
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions-rust-lang/audit@v1
-        continue-on-error: true
-
       - name: install protoc
         run: |
           sudo apt-get install protobuf-compiler
