@@ -39,7 +39,7 @@ pub mod safe_prime {
 
     pub(super) fn gen_qp(bits: u64) -> (BigUint, BigUint) {
         let mut rng = rand::thread_rng();
-        let mut do_gen = || {
+        let do_gen = || {
             let mut v = rng.gen_biguint(bits - 2);
             v.set_bit(bits - 1, true);
             v.set_bit(bits - 2, true);
@@ -56,7 +56,7 @@ pub mod safe_prime {
             if !e.is_one() {
                 return false;
             }
-            return is_prime(q) && is_prime(p);
+            is_prime(q) && is_prime(p)
         };
 
         loop {
@@ -152,7 +152,7 @@ pub mod miller_rabin {
                     return false;
                 }
             }
-            return false;
+            false
         })
     }
 }
