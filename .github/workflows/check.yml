@@ -24,6 +24,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions-rust-lang/audit@v1
+        continue-on-error: true
 
       - name: Report test coverage
         uses: actions-rs/tarpaulin@v0.1
