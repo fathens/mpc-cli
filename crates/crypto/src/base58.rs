@@ -38,7 +38,7 @@ impl Prefix {
     pub fn get_public(&self) -> Result<Self> {
         PREFIX_PAIRS
             .get(self)
-            .map(|v| v.clone())
+            .cloned()
             .ok_or(CryptoError::unsupported_version())
     }
 
@@ -105,7 +105,6 @@ pub fn decode(src: &str) -> Result<DecodedExtKey> {
             return Err(CryptoError::invalid_format("extend key"));
         }
     }
-    let key = buf.into();
 
     let result = DecodedExtKey {
         prefix,
@@ -113,7 +112,7 @@ pub fn decode(src: &str) -> Result<DecodedExtKey> {
         parent,
         child_number,
         chain_code,
-        key,
+        key: buf,
     };
 
     Ok(result)

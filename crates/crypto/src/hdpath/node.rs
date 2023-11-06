@@ -18,10 +18,7 @@ impl Node {
     }
 
     pub fn is_hardened(&self) -> bool {
-        match self {
-            Node::Hardened(_) => true,
-            _ => false,
-        }
+        matches!(self, Node::Hardened(_))
     }
 
     pub fn is_normal(&self) -> bool {

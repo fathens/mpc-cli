@@ -94,7 +94,7 @@ impl ProofMod {
                 }
             }
             zs.push(BigUint::zero());
-            return BigUint::zero();
+            BigUint::zero()
         }));
         let z = Iterations(zs.try_into().unwrap());
 
@@ -149,21 +149,21 @@ impl ProofMod {
                 return false;
             }
 
-            return true;
+            true
         })
     }
 }
 
-impl Into<[Bytes; ProofMod::SIZE]> for ProofMod {
-    fn into(self) -> [Bytes; ProofMod::SIZE] {
+impl From<ProofMod> for [Bytes; ProofMod::SIZE] {
+    fn from(val: ProofMod) -> Self {
         let mut bss: Vec<Bytes> = Vec::with_capacity(ProofMod::SIZE);
-        bss.push(self.w.to_bytes_be().into());
-        (self.x.0)
+        bss.push(val.w.to_bytes_be().into());
+        (val.x.0)
             .into_iter()
             .for_each(|v| bss.push(v.to_bytes_be().into()));
-        bss.push(self.a.to_bytes_be().into());
-        bss.push(self.b.to_bytes_be().into());
-        (self.z.0)
+        bss.push(val.a.to_bytes_be().into());
+        bss.push(val.b.to_bytes_be().into());
+        (val.z.0)
             .into_iter()
             .for_each(|v| bss.push(v.to_bytes_be().into()));
         bss.try_into().unwrap()

@@ -96,7 +96,7 @@ impl AsRef<[BigUint]> for Secrets {
 
 impl Secrets {
     const PARTS_CAP: usize = 3;
-    const MAX_PART_SIZE: usize = 1 * 1024 * 1024; // 1 MB
+    const MAX_PART_SIZE: usize = 1024 * 1024; // 1 MB
 
     pub fn to_vec(&self) -> Vec<BigUint> {
         self.0.clone()

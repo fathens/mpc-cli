@@ -53,7 +53,7 @@ impl PrvKey for PrvKeyBytes {
     fn get_public(&self) -> Result<Self::Public> {
         let a = EcdsaScalar::try_from(self.as_ref())?;
         let b = GENERATOR * *a;
-        Ok(b.to_bytes().as_slice().try_into()?)
+        b.to_bytes().as_slice().try_into()
     }
 }
 
@@ -84,14 +84,14 @@ impl KeyBytes for PubKeyBytes {
         let a = EcdsaScalar::try_from(salt)?;
         let b = GENERATOR * *a;
         let c = b + self.to_point();
-        Ok(c.to_bytes().as_slice().try_into()?)
+        c.to_bytes().as_slice().try_into()
     }
 }
 
 impl PubKey for PubKeyBytes {
     fn fingerprint(&self) -> Fingerprint {
         let sha = Sha256::digest(self.as_ref());
-        let ds = Ripemd160::digest(&sha);
+        let ds = Ripemd160::digest(sha);
         ds[..4].try_into().expect("taken 4 bytes must be 4 bytes")
     }
 }
