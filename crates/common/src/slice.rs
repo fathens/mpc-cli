@@ -32,11 +32,11 @@ pub fn pad_left(src: Bytes, len: usize) -> Bytes {
 }
 
 pub fn is_non_empty_all(src_list: &[Bytes]) -> bool {
-    src_list.len() > 0 && src_list.iter().all(|v| !v.is_empty())
+    !src_list.is_empty() && src_list.iter().all(|v| !v.is_empty())
 }
 
 pub fn is_non_empty_with_length(src_list: &[Bytes], expected_len: usize) -> bool {
-    src_list.len() > 0 && src_list.len() == expected_len && src_list.iter().all(|v| !v.is_empty())
+    !src_list.is_empty() && src_list.len() == expected_len && src_list.iter().all(|v| !v.is_empty())
 }
 
 #[cfg(test)]
@@ -46,7 +46,7 @@ mod tests {
     #[test]
     fn bigints_to_bytes_test() {
         let check = |src: &[u32], expected: &[&[u8]]| {
-            let src: Vec<_> = src.into_iter().map(|v| BigUint::from(*v)).collect();
+            let src: Vec<_> = src.iter().map(|v| BigUint::from(*v)).collect();
             let actual = bigints_to_bytes(src.as_slice());
             assert_eq!(actual.len(), expected.len());
             for (a, e) in actual.iter().zip(expected.iter()) {
@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn multibytes_to_bigints_test() {
         let check = |src: &[&[u8]], expected: &[u32]| {
-            let src: Vec<_> = src.iter().map(|v| Vec::from(v.as_ref()).into()).collect();
+            let src: Vec<_> = src.iter().map(|v| Vec::from(*v).into()).collect();
             let actual = multibytes_to_bigints(src.as_slice());
             assert_eq!(actual.len(), expected.len());
             for (a, e) in actual.iter().zip(expected.iter()) {
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn pad_left_test() {
         let check = |src: &[u8], len: usize, expected: &[u8]| {
-            let actual = pad_left(Vec::from(src.as_ref()).into(), len);
+            let actual = pad_left(Vec::from(src).into(), len);
             assert_eq!(actual.as_ref(), expected);
         };
 
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn is_non_empty_all_test() {
         let check = |src: &[&[u8]], expected: bool| {
-            let src: Vec<_> = src.iter().map(|v| Vec::from(v.as_ref()).into()).collect();
+            let src: Vec<_> = src.iter().map(|v| Vec::from(*v).into()).collect();
             let actual = is_non_empty_all(src.as_slice());
             assert_eq!(actual, expected);
         };
@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn is_non_empty_with_length_test() {
         let check = |src: &[&[u8]], with_len: usize, expected: bool| {
-            let src: Vec<_> = src.iter().map(|v| Vec::from(v.as_ref()).into()).collect();
+            let src: Vec<_> = src.iter().map(|v| Vec::from(*v).into()).collect();
             let actual = is_non_empty_with_length(src.as_slice(), with_len);
             assert_eq!(actual, expected);
         };

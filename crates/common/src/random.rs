@@ -99,8 +99,7 @@ mod tests {
         let mut check = |bits: u64| {
             let r = get_random_int(&mut rnd, bits).unwrap();
             let ceiling = BigUint::one() << bits;
-            assert_eq!(
-                true,
+            assert!(
                 r < ceiling,
                 "r: {}, ceiling(bits): {}({})",
                 r,
@@ -133,7 +132,7 @@ mod tests {
         let mut check = |ceiling_bits: u32| {
             let ceiling = BigUint::one() << ceiling_bits;
             let r = get_random_positive_int(&mut rnd, &ceiling).unwrap();
-            assert_eq!(true, r < ceiling);
+            assert!(r < ceiling);
         };
 
         for ceiling_bits in 1..100 {
@@ -155,14 +154,7 @@ mod tests {
         let mut rnd = rand::thread_rng();
         let mut check = |bits: u64| {
             let r = get_random_prime_int(&mut rnd, bits).unwrap();
-            assert_eq!(
-                true,
-                r.bits() <= bits,
-                "r: {}({}), bits: {}",
-                r,
-                r.bits(),
-                bits
-            );
+            assert!(r.bits() <= bits, "r: {}({}), bits: {}", r, r.bits(), bits);
         };
 
         for _ in 0..10 {
@@ -175,17 +167,15 @@ mod tests {
         let check = |a: &str, b: &str| {
             let modulus = BigUint::from_str(a).unwrap();
             let number = BigUint::from_str(b).unwrap();
-            assert_eq!(
-                true,
+            assert!(
                 is_number_in_multiplicative_group(&modulus, &number),
                 "modulus: {}, number: {}",
                 modulus,
                 number
             );
 
-            assert_eq!(
-                false,
-                is_number_in_multiplicative_group(&number, &modulus),
+            assert!(
+                !is_number_in_multiplicative_group(&number, &modulus),
                 "modulus: {}, number: {}",
                 modulus,
                 number
@@ -231,9 +221,8 @@ mod tests {
         let check = |a: &str, b: &str| {
             let modulus = BigUint::from_str(a).unwrap();
             let number = BigUint::from_str(b).unwrap();
-            assert_eq!(
-                false,
-                is_number_in_multiplicative_group(&modulus, &number),
+            assert!(
+                !is_number_in_multiplicative_group(&modulus, &number),
                 "modulus: {}, number: {}",
                 modulus,
                 number
@@ -252,7 +241,7 @@ mod tests {
         for _ in 0..100 {
             let modulus = get_random_int(&mut rnd, 1024).unwrap();
             let r = get_random_positive_relatively_prime_int(&mut rnd, &modulus).unwrap();
-            assert_eq!(true, is_number_in_multiplicative_group(&modulus, &r));
+            assert!(is_number_in_multiplicative_group(&modulus, &r));
         }
     }
 
@@ -272,7 +261,7 @@ mod tests {
         for _ in 0..100 {
             let modulus = get_random_int(&mut rnd, 1024).unwrap();
             let r = get_random_generator_of_the_quadratic_residue(&mut rnd, &modulus).unwrap();
-            assert_eq!(true, r < modulus);
+            assert!(r < modulus);
         }
     }
 
@@ -294,8 +283,8 @@ mod tests {
             let mut modulus = get_random_int(&mut rnd, 1024).unwrap();
             modulus.set_bit(0, true);
             let r = get_random_quadratic_non_residue(&mut rnd, &modulus).unwrap();
-            assert_eq!(true, r < modulus);
-            assert_eq!(true, r.jacobi(&modulus) == -1);
+            assert!(r < modulus);
+            assert_eq!(r.jacobi(&modulus), -1);
         }
     }
 
