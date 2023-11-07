@@ -26,7 +26,7 @@ jobs:
 
       - name: Check clippy
         continue-on-error: true
-        run: cargo clippy --all-targets --all-features
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - uses: giraffate/clippy-action@v1
         with:
