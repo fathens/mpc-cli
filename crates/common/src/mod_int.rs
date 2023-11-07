@@ -191,7 +191,7 @@ mod tests {
         let m = ModInt(BigUint::from(10u32));
         let check = |x: u32, y: i32| {
             let a = m.powi(&BigUint::from(x), &BigInt::from(y));
-            assert_eq!(a.is_err(), true);
+            assert!(a.is_err());
         };
         check(2, -3);
     }
@@ -205,7 +205,7 @@ mod tests {
                 let y = m.mul(&r, &BigUint::from(x));
                 assert_eq!(y, BigUint::one());
             } else {
-                assert_eq!(x == 0 || 10 % x == 0 || x % 2 == 0, true);
+                assert!(x == 0 || 10 % x == 0 || x % 2 == 0);
             }
         };
         check(0);

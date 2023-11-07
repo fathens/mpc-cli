@@ -191,10 +191,10 @@ mod test {
                 BigUint::parse_bytes(val.as_str().unwrap().as_bytes(), 10).unwrap()
             };
             let to_iterations = |val: &Value| -> Iterations {
-                let bs: Vec<_> = val.as_array().unwrap().iter().map(|v| to_int(v)).collect();
+                let bs: Vec<_> = val.as_array().unwrap().iter().map(to_int).collect();
                 Iterations(bs.try_into().unwrap())
             };
-            let values: Value = serde_json::from_str(&SAMPLES).unwrap();
+            let values: Value = serde_json::from_str(SAMPLES).unwrap();
             values
                 .as_array()
                 .unwrap()
