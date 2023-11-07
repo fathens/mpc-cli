@@ -161,8 +161,8 @@ mod tests {
         BigUint: From<N>,
     {
         parts
-            .into_iter()
-            .map(|ps| ps.into_iter().map(|p| BigUint::from(*p)).collect())
+            .iter()
+            .map(|ps| ps.iter().map(|p| BigUint::from(*p)).collect())
             .collect()
     }
 
@@ -176,7 +176,7 @@ mod tests {
         assert_eq!(secrets, d.as_ref());
         let mut bad = hcd.clone();
         bad.decommitment.salt += 1_u8;
-        assert_eq!(false, bad.decommit().is_some());
+        assert!(bad.decommit().is_none());
     }
 
     #[test]
