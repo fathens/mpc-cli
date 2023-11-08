@@ -2,22 +2,17 @@ use num_bigint::BigUint;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GermainSafePrime {
-    q: BigUint,
-    p: BigUint, // 2q + 1
+    pub prime: BigUint,
+    pub safe_prime: BigUint, // 2q + 1
 }
 
 impl GermainSafePrime {
-    pub fn prime(&self) -> &BigUint {
-        &self.q
-    }
-
-    pub fn safe_prime(&self) -> &BigUint {
-        &self.p
-    }
-
     pub fn generate(bits: u64) -> Self {
         let (q, p) = safe_prime::gen_qp(bits - 1);
-        Self { q, p }
+        Self {
+            prime: q,
+            safe_prime: p,
+        }
     }
 }
 
@@ -169,10 +164,10 @@ mod tests {
         let check = || {
             let bits = 128;
             let (gsp, dur) = time(|| GermainSafePrime::generate(bits));
-            let q = gsp.prime();
-            let p = gsp.safe_prime();
+            let q = &gsp.prime;
+            let p = &gsp.safe_prime;
             let config = Some(PrimalityTestConfig::strict());
-            assert_eq!(q.clone() * 2_u32 + 1_u32, p.clone());
+            assert_eq!(&(q * 2_u32 + 1_u32), p);
             assert!(is_prime(q, config).probably());
             assert!(is_prime(p, config).probably());
             assert_eq!(q.bits(), bits - 1);
