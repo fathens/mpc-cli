@@ -1,6 +1,10 @@
+use crate::{CryptoError, Result};
+use common::mod_int::ModInt;
 use common::prime::GermainSafePrime;
+use common::random::get_random_positive_relatively_prime_int;
 use num_bigint::BigUint;
 use num_integer::Integer;
+use num_traits::One;
 use rayon::prelude::*;
 
 pub struct PublicKey {
@@ -9,10 +13,15 @@ pub struct PublicKey {
 
 pub struct PrivateKey {
     pub public_key: PublicKey,
-    lambda_n: BigUint, // lcm(p-1, q-1)
+    pub p: BigUint,
+    pub q: BigUint,
     phi_n: BigUint,    // (p-1)(q-1)
-    p: BigUint,
-    q: BigUint,
+    lambda_n: BigUint, // lcm(p-1, q-1)
+}
+
+pub struct EncryptedMessage {
+    pub cypher: BigUint,
+    pub randomness: BigUint,
 }
 
 impl PrivateKey {
@@ -28,10 +37,10 @@ impl PrivateKey {
 
         Self {
             public_key: PublicKey { n },
-            lambda_n,
-            phi_n,
             p,
             q,
+            phi_n,
+            lambda_n,
         }
     }
 
@@ -55,12 +64,52 @@ impl PrivateKey {
             })
             .unwrap()
     }
+
+    pub fn decrypt(&self, c: &BigUint) -> Result<BigUint> {
+        let n2 = ModInt::new(&(&self.public_key.n * &self.public_key.n));
+        if c >= n2.module() {
+            return Err(CryptoError::message_too_long());
+        }
+        if c.gcd(n2.module()) > One::one() {
+            return Err(CryptoError::message_malformed());
+        }
+
+        let lcalc = |a| -> BigUint {
+            let x = n2.pow(a, &self.lambda_n) - 1_u8;
+            x / &self.public_key.n
+        };
+
+        let lc = lcalc(c);
+        let lg = lcalc(&(&self.public_key.n + 1_u8));
+        let mod_n = ModInt::new(&self.public_key.n);
+        let inv = mod_n.mod_inverse(&lg)?;
+        Ok(mod_n.mul(&lc, &inv))
+    }
+}
+
+impl PublicKey {
+    pub fn encrypt(&self, m: &BigUint) -> Result<EncryptedMessage> {
+        if m >= &self.n {
+            return Err(CryptoError::message_too_long());
+        }
+        let mut rnd = rand::thread_rng();
+        let x = get_random_positive_relatively_prime_int(&mut rnd, &self.n)?;
+        let n2 = ModInt::new(&(&self.n * &self.n));
+        let gm = n2.pow(&(&self.n + 1_u8), m);
+        let xn = n2.pow(&x, &self.n);
+        let c = n2.mul(&gm, &xn);
+        Ok(EncryptedMessage {
+            cypher: c,
+            randomness: x,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use common::prime::miller_rabin::is_prime;
+    use num_bigint::RandBigInt;
 
     #[test]
     fn private_key_generate() {
@@ -74,5 +123,25 @@ mod tests {
         assert!((&sk.p - &sk.q).bits() >= BIT_LEN - PrivateKey::PQ_BIT_LEN_DIFFERENCE);
         assert_eq!(sk.public_key.n, &sk.p * &sk.q);
         assert_eq!(sk.phi_n, (&sk.p - 1_u8) * (&sk.q - 1_u8));
+    }
+
+    #[test]
+    fn encrypt_decrypt() {
+        const BIT_LEN: u64 = 512;
+        let sk = PrivateKey::generate(BIT_LEN * 2);
+        let mut rnd = rand::thread_rng();
+        let mut m = rnd.gen_biguint(BIT_LEN);
+        m.set_bit(BIT_LEN - 1, true);
+        let encrypted = sk.public_key.encrypt(&m).unwrap();
+        let m2 = sk.decrypt(&encrypted.cypher).unwrap();
+        assert_eq!(m, m2);
+    }
+
+    #[test]
+    fn encrypt_failure() {
+        const BIT_LEN: u64 = 128;
+        let sk = PrivateKey::generate(BIT_LEN * 2);
+        let m = BigUint::one() << (BIT_LEN * 2);
+        assert!(sk.public_key.encrypt(&m).is_err());
     }
 }
