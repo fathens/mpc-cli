@@ -20,6 +20,8 @@ jobs:
 
       - uses: taiki-e/install-action@cargo-tarpaulin
 
+      - uses: r7kamura/rust-problem-matchers@v1
+
       - name: Check format
         continue-on-error: true
         run: cargo fmt --all -- --check
