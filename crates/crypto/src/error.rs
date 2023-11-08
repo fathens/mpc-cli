@@ -62,6 +62,14 @@ impl CryptoError {
     pub fn need_primes() -> CryptoError {
         CryptoError("Need primes".to_owned())
     }
+
+    pub fn message_too_long() -> CryptoError {
+        CryptoError("Too long message".to_owned())
+    }
+
+    pub fn message_malformed() -> CryptoError {
+        CryptoError("Malformed message".to_owned())
+    }
 }
 
 impl Display for CryptoError {
