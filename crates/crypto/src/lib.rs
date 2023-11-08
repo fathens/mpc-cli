@@ -5,6 +5,7 @@ pub mod extend_key;
 mod fixed_bytes;
 pub mod hash;
 pub mod hdpath;
+pub mod pallier;
 pub mod proof;
 pub mod utils;
 
