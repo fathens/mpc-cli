@@ -35,15 +35,15 @@ impl Proof {
 
     fn generate_xs(k: &BigUint, n: &BigUint, point: &AffinePoint) -> [BigUint; Self::ITERATION] {
         let ep = point.to_encoded_point(false);
-        let xb: &[u8] = ep.x().unwrap().as_ref();
-        let yb: &[u8] = ep.y().unwrap().as_ref();
-        let kb: &[u8] = k.to_bytes_be().as_ref();
-        let nb: &[u8] = n.to_bytes_be().as_ref();
+        let xb = ep.x().unwrap();
+        let yb = ep.y().unwrap();
+        let kb = k.to_bytes_be();
+        let nb = n.to_bytes_be();
         let blocks = ((n.bits() as f64) / 256.0).ceil().to_usize().unwrap();
 
-        let to_bs = |i: usize| i.to_string().as_bytes();
+        let to_bs = |i: usize| i.to_string().as_bytes().to_vec();
 
-        let mut xs: Vec<_> = (0..Self::ITERATION)
+        let xs: Vec<_> = (0..Self::ITERATION)
             .into_par_iter()
             .map(|i| {
                 let ib = to_bs(i);
@@ -54,7 +54,7 @@ impl Proof {
                             .into_par_iter()
                             .map(|j| {
                                 let jb = to_bs(j);
-                                let hash = hash_sha512_256(&[ib, jb, tb, kb, xb, yb, nb]);
+                                let hash = hash_sha512_256(&[&ib, &jb, &tb, &kb, &xb, &yb, &nb]);
                                 hash.as_ref().to_vec()
                             })
                             .flatten()
@@ -70,12 +70,15 @@ impl Proof {
     }
 
     pub fn new(key: &PrivateKey, k: &BigUint, point: &AffinePoint) -> Self {
-        let mut xs = Self::generate_xs(k, key.n(), point);
-        xs.iter().enumerate().for_each(|(i, x)| {
-            let m = key.n().invm(&key.phi_n).unwrap();
-            xs[i] = x.powm(&m, key.n());
-        });
-        Self(xs)
+        let xs = Self::generate_xs(k, key.n(), point);
+        let ys: Vec<_> = xs
+            .iter()
+            .map(|x| {
+                let m = key.n().invm(&key.phi_n).unwrap();
+                x.powm(&m, key.n())
+            })
+            .collect();
+        Self(ys.try_into().unwrap())
     }
 }
 
