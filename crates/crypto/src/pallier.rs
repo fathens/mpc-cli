@@ -1,10 +1,14 @@
+use crate::hash::hash_sha512_256;
 use crate::{CryptoError, Result};
 use common::mod_int::ModInt;
 use common::prime::GermainSafePrime;
-use common::random::get_random_positive_relatively_prime_int;
+use common::random::{get_random_positive_relatively_prime_int, is_number_in_multiplicative_group};
+use elliptic_curve::sec1::ToEncodedPoint;
+use k256::AffinePoint;
 use num_bigint::BigUint;
 use num_integer::Integer;
-use num_traits::One;
+use num_modular::{ModularPow, ModularUnaryOps};
+use num_traits::{One, ToPrimitive};
 use rayon::prelude::*;
 
 pub struct PublicKey {
@@ -24,8 +28,63 @@ pub struct EncryptedMessage {
     pub randomness: BigUint,
 }
 
+pub struct Proof([BigUint; Proof::ITERATION]);
+
+impl Proof {
+    const ITERATION: usize = 13;
+
+    fn generate_xs(k: &BigUint, n: &BigUint, point: &AffinePoint) -> [BigUint; Self::ITERATION] {
+        let ep = point.to_encoded_point(false);
+        let xb: &[u8] = ep.x().unwrap().as_ref();
+        let yb: &[u8] = ep.y().unwrap().as_ref();
+        let kb: &[u8] = k.to_bytes_be().as_ref();
+        let nb: &[u8] = n.to_bytes_be().as_ref();
+        let blocks = ((n.bits() as f64) / 256.0).ceil().to_usize().unwrap();
+
+        let to_bs = |i: usize| i.to_string().as_bytes();
+
+        let mut xs: Vec<_> = (0..Self::ITERATION)
+            .into_par_iter()
+            .map(|i| {
+                let ib = to_bs(i);
+                (0_usize..)
+                    .find_map(|t| {
+                        let tb = to_bs(t);
+                        let bs: Vec<_> = (0..blocks)
+                            .into_par_iter()
+                            .map(|j| {
+                                let jb = to_bs(j);
+                                let hash = hash_sha512_256(&[ib, jb, tb, kb, xb, yb, nb]);
+                                hash.as_ref().to_vec()
+                            })
+                            .flatten()
+                            .collect();
+                        let x = BigUint::from_bytes_be(&bs);
+                        is_number_in_multiplicative_group(n, &x).then_some(x)
+                    })
+                    .unwrap()
+            })
+            .collect();
+
+        xs.try_into().unwrap()
+    }
+
+    pub fn new(key: &PrivateKey, k: &BigUint, point: &AffinePoint) -> Self {
+        let mut xs = Self::generate_xs(k, key.n(), point);
+        xs.iter().enumerate().for_each(|(i, x)| {
+            let m = key.n().invm(&key.phi_n).unwrap();
+            xs[i] = x.powm(&m, key.n());
+        });
+        Self(xs)
+    }
+}
+
 impl PrivateKey {
     const PQ_BIT_LEN_DIFFERENCE: u64 = 3;
+
+    pub fn n(&self) -> &BigUint {
+        &self.public_key.n
+    }
 
     pub fn generate(mudulus_bit_len: u64) -> Self {
         let (p, q) = Self::gen_pq(mudulus_bit_len / 2);
@@ -66,7 +125,7 @@ impl PrivateKey {
     }
 
     pub fn decrypt(&self, c: &BigUint) -> Result<BigUint> {
-        let n2 = ModInt::new(&(&self.public_key.n * &self.public_key.n));
+        let n2 = ModInt::new(&(self.n() * self.n()));
         if c >= n2.module() {
             return Err(CryptoError::message_too_long());
         }
@@ -76,12 +135,12 @@ impl PrivateKey {
 
         let lcalc = |a| -> BigUint {
             let x = n2.pow(a, &self.lambda_n) - 1_u8;
-            x / &self.public_key.n
+            x / self.n()
         };
 
         let lc = lcalc(c);
-        let lg = lcalc(&(&self.public_key.n + 1_u8));
-        let mod_n = ModInt::new(&self.public_key.n);
+        let lg = lcalc(&(self.n() + 1_u8));
+        let mod_n = ModInt::new(self.n());
         let inv = mod_n.mod_inverse(&lg)?;
         Ok(mod_n.mul(&lc, &inv))
     }
