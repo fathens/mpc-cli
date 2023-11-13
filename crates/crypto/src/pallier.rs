@@ -25,9 +25,9 @@ impl PublicKey {
 }
 
 pub struct PrivateKey {
-    pub public_key: PublicKey,
-    pub p: BigUint,
-    pub q: BigUint,
+    public_key: PublicKey,
+    p: BigUint,
+    q: BigUint,
     phi_n: BigUint,    // (p-1)(q-1)
     lambda_n: BigUint, // lcm(p-1, q-1)
 }
@@ -113,6 +113,18 @@ impl Proof {
 
 impl PrivateKey {
     const PQ_BIT_LEN_DIFFERENCE: u64 = 3;
+
+    pub fn public_key(&self) -> &PublicKey {
+        &self.public_key
+    }
+
+    pub fn p(&self) -> &BigUint {
+        &self.p
+    }
+
+    pub fn q(&self) -> &BigUint {
+        &self.q
+    }
 
     pub fn n(&self) -> &BigUint {
         self.public_key.n()
