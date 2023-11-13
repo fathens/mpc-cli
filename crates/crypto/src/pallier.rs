@@ -16,12 +16,6 @@ pub struct PublicKey {
     n: BigUint,
 }
 
-impl PublicKey {
-    pub fn n(&self) -> &BigUint {
-        &self.n
-    }
-}
-
 pub struct PrivateKey {
     public_key: PublicKey,
     p: BigUint,
@@ -205,6 +199,10 @@ impl PrivateKey {
 }
 
 impl PublicKey {
+    pub fn n(&self) -> &BigUint {
+        &self.n
+    }
+
     pub fn encrypt(&self, m: &BigUint) -> Result<EncryptedMessage> {
         let n = self.n();
         if m >= n {
