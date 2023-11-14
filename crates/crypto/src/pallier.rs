@@ -18,7 +18,7 @@ pub struct PublicKey {
 
 pub struct PrivateKey {
     public_key: PublicKey,
-    p: BigUint,
+    p: BigUint, // p > q
     q: BigUint,
     phi_n: BigUint,    // (p-1)(q-1)
     lambda_n: BigUint, // lcm(p-1, q-1)
@@ -34,6 +34,38 @@ pub struct Proof([BigUint; Proof::ITERATION]);
 impl Proof {
     const ITERATION: usize = 13;
 
+    pub fn new<A, C>(key: &PrivateKey, k: &BigUint, point: &A) -> Self
+    where
+        A: ToEncodedPoint<C>,
+        C: Curve,
+        FieldBytesSize<C>: ModulusSize,
+    {
+        let xs = Self::generate_xs(key.public_key(), k, point);
+        let ys: Vec<_> = xs
+            .iter()
+            .map(|x| {
+                let m = key.n().invm(&key.phi_n).unwrap();
+                x.powm(&m, key.n())
+            })
+            .collect();
+        Self(ys.try_into().unwrap())
+    }
+
+    pub fn verify<A, C>(&self, pubkey: &PublicKey, k: &BigUint, point: &A) -> bool
+    where
+        A: ToEncodedPoint<C>,
+        C: Curve,
+        FieldBytesSize<C>: ModulusSize,
+    {
+        let n = pubkey.n();
+        let xs = Self::generate_xs(pubkey, k, point);
+        self.0.par_iter().zip(xs.par_iter()).all(|(y, x)| {
+            let a = x % n;
+            let b = y.powm(n, n);
+            a == b
+        })
+    }
+
     fn generate_xs<A, C>(pubkey: &PublicKey, k: &BigUint, point: &A) -> [BigUint; Self::ITERATION]
     where
         A: ToEncodedPoint<C>,
@@ -44,10 +76,10 @@ impl Proof {
         let x = ep.x().unwrap();
         let y = ep.y().unwrap();
 
-        Self::generate_xs_by_xy(k, pubkey.n(), (x.to_vec(), y.to_vec()))
+        Self::generate_xs_by_xy(pubkey.n(), k, (x.to_vec(), y.to_vec()))
     }
 
-    fn generate_xs_by_xy<A>(k: &BigUint, n: &BigUint, point: (A, A)) -> [BigUint; Self::ITERATION]
+    fn generate_xs_by_xy<A>(n: &BigUint, k: &BigUint, point: (A, A)) -> [BigUint; Self::ITERATION]
     where
         A: Sync,
         A: Deref<Target = [u8]>, // in big-endian
@@ -84,38 +116,6 @@ impl Proof {
             .collect();
 
         xs.try_into().unwrap()
-    }
-
-    pub fn new<A, C>(key: &PrivateKey, k: &BigUint, point: &A) -> Self
-    where
-        A: ToEncodedPoint<C>,
-        C: Curve,
-        FieldBytesSize<C>: ModulusSize,
-    {
-        let xs = Self::generate_xs(key.public_key(), k, point);
-        let ys: Vec<_> = xs
-            .iter()
-            .map(|x| {
-                let m = key.n().invm(&key.phi_n).unwrap();
-                x.powm(&m, key.n())
-            })
-            .collect();
-        Self(ys.try_into().unwrap())
-    }
-
-    pub fn verify<A, C>(&self, pubkey: &PublicKey, k: &BigUint, point: &A) -> bool
-    where
-        A: ToEncodedPoint<C>,
-        C: Curve,
-        FieldBytesSize<C>: ModulusSize,
-    {
-        let n = pubkey.n();
-        let xs = Self::generate_xs(pubkey, k, point);
-        self.0.par_iter().zip(xs.par_iter()).all(|(y, x)| {
-            let a = x % n;
-            let b = y.powm(n, n);
-            a == b
-        })
     }
 }
 
@@ -330,7 +330,7 @@ mod tests {
             "5452321119129956709868065458392652003787107832584676957731122868824538806700278910148262515921484703313737985545792252695898389781085111365107636541419783146586549882214766574791415570735956203691775888246583217726095040690726406781549749819392038395547039344133233013214995145000242034606862581948752602167219865552794372379408057543791215964740883940710282639509520972970319015592177187597554547387060119532823184864812585230031971391692368660867486086188259179343857591756579252483336735071480753159960817251396396420272894311053073909292266213311194571610811072642974028940156694295493809964787133767734008846758",
             "22770476443770469410468443835526959870571658440108523492659895291309004068866749148002145400383830705962349497556450408823877589907242651769796880313831328231280557584644214384115511978540095350852076434496078762079910163655621133350259292622322651862508243543942882842796244621624345721274052346520388560672956186051181738925366165677772185896341886710974504158632918144807175780932513615989734647038030575147734752041698108160159587312262176303779619044052068180522040222818214341775110330779426191435808162168504173921319002291723870733256038430810470241062781197101100633043157187885246168279953111555584543679920",
         ].iter().map(|s| BigUint::from_str(s).unwrap()).collect();
-        let xs = Proof::generate_xs_by_xy(&k, &n, (x.to_bytes_be(), y.to_bytes_be()));
+        let xs = Proof::generate_xs_by_xy(&n, &k, (x.to_bytes_be(), y.to_bytes_be()));
         assert!(xs
             .par_iter()
             .all(|x| is_number_in_multiplicative_group(&n, x)));
