@@ -10,7 +10,6 @@ use num_integer::Integer;
 use num_modular::{ModularPow, ModularUnaryOps};
 use num_traits::{One, ToPrimitive};
 use rayon::prelude::*;
-use std::ops::Deref;
 
 pub struct PublicKey {
     n: BigUint,
@@ -76,35 +75,33 @@ impl Proof {
         let x = BigUint::from_bytes_be(ep.x().unwrap());
         let y = BigUint::from_bytes_be(ep.y().unwrap());
 
-        Self::generate_xs_by_xy(pubkey.n(), k, (x.to_bytes_be(), y.to_bytes_be()))
+        Self::generate_xs_by_xy(pubkey.n(), k, (&x.to_bytes_be(), &y.to_bytes_be()))
     }
 
-    fn generate_xs_by_xy<A>(n: &BigUint, k: &BigUint, point: (A, A)) -> [BigUint; Self::ITERATION]
-    where
-        A: Sync,
-        A: Deref<Target = [u8]>, // in big-endian
-    {
-        let xb = point.0;
-        let yb = point.1;
-        let kb = k.to_bytes_be();
-        let nb = n.to_bytes_be();
+    fn generate_xs_by_xy(
+        n: &BigUint,
+        k: &BigUint,
+        (xb, yb): (&[u8], &[u8]), // in big-endian
+    ) -> [BigUint; Self::ITERATION] {
+        let kb = &k.to_bytes_be();
+        let nb = &n.to_bytes_be();
         let blocks = ((n.bits() as f64) / 256.0).ceil().to_usize().unwrap();
 
         let to_bs = |i: usize| i.to_string().as_bytes().to_vec();
 
-        let mut t = 0_usize;
+        let mut t = 0;
         let xs: Vec<_> = (0..Self::ITERATION)
             .map(|i| {
-                let ib = to_bs(i);
+                let ib = &to_bs(i);
                 (t..)
                     .find_map(|ti| {
                         t = ti;
-                        let tb = to_bs(t);
+                        let tb = &to_bs(t);
                         let bs: Vec<_> = (0..blocks)
                             .into_par_iter()
                             .flat_map(|j| {
-                                let jb = to_bs(j);
-                                let hash = hash_sha512_256(&[&ib, &jb, &tb, &kb, &xb, &yb, &nb]);
+                                let jb = &to_bs(j);
+                                let hash = hash_sha512_256(&[ib, jb, tb, kb, xb, yb, nb]);
                                 hash.as_ref().to_vec()
                             })
                             .collect();
@@ -330,7 +327,7 @@ mod tests {
             "5452321119129956709868065458392652003787107832584676957731122868824538806700278910148262515921484703313737985545792252695898389781085111365107636541419783146586549882214766574791415570735956203691775888246583217726095040690726406781549749819392038395547039344133233013214995145000242034606862581948752602167219865552794372379408057543791215964740883940710282639509520972970319015592177187597554547387060119532823184864812585230031971391692368660867486086188259179343857591756579252483336735071480753159960817251396396420272894311053073909292266213311194571610811072642974028940156694295493809964787133767734008846758",
             "22770476443770469410468443835526959870571658440108523492659895291309004068866749148002145400383830705962349497556450408823877589907242651769796880313831328231280557584644214384115511978540095350852076434496078762079910163655621133350259292622322651862508243543942882842796244621624345721274052346520388560672956186051181738925366165677772185896341886710974504158632918144807175780932513615989734647038030575147734752041698108160159587312262176303779619044052068180522040222818214341775110330779426191435808162168504173921319002291723870733256038430810470241062781197101100633043157187885246168279953111555584543679920",
         ].iter().map(|s| BigUint::from_str(s).unwrap()).collect();
-        let xs = Proof::generate_xs_by_xy(&n, &k, (x.to_bytes_be(), y.to_bytes_be()));
+        let xs = Proof::generate_xs_by_xy(&n, &k, (&x.to_bytes_be(), &y.to_bytes_be()));
         assert!(xs
             .par_iter()
             .all(|x| is_number_in_multiplicative_group(&n, x)));
