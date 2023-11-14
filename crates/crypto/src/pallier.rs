@@ -73,10 +73,10 @@ impl Proof {
         FieldBytesSize<C>: ModulusSize,
     {
         let ep = point.to_encoded_point(false);
-        let x = ep.x().unwrap();
-        let y = ep.y().unwrap();
+        let x = BigUint::from_bytes_be(ep.x().unwrap());
+        let y = BigUint::from_bytes_be(ep.y().unwrap());
 
-        Self::generate_xs_by_xy(pubkey.n(), k, (x.to_vec(), y.to_vec()))
+        Self::generate_xs_by_xy(pubkey.n(), k, (x.to_bytes_be(), y.to_bytes_be()))
     }
 
     fn generate_xs_by_xy<A>(n: &BigUint, k: &BigUint, point: (A, A)) -> [BigUint; Self::ITERATION]
