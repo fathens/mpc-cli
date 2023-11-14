@@ -50,7 +50,7 @@ impl Proof {
     fn generate_xs_by_xy<A>(k: &BigUint, n: &BigUint, point: (A, A)) -> [BigUint; Self::ITERATION]
     where
         A: Sync,
-        A: Deref<Target = [u8]>,
+        A: Deref<Target = [u8]>, // in big-endian
     {
         let xb = point.0;
         let yb = point.1;
