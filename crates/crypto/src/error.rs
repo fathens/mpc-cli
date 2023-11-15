@@ -70,6 +70,10 @@ impl CryptoError {
     pub fn message_malformed() -> CryptoError {
         CryptoError("Malformed message".to_owned())
     }
+
+    pub fn point_overflow() -> CryptoError {
+        CryptoError("Point overflow".to_owned())
+    }
 }
 
 impl Display for CryptoError {
