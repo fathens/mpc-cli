@@ -1,5 +1,4 @@
 use num_bigint::{BigUint, RandBigInt};
-use rand::rngs::ThreadRng;
 
 pub fn generate<F, const N: usize>(mut f: F) -> [BigUint; N]
 where
@@ -12,8 +11,8 @@ where
     bs.try_into().unwrap()
 }
 
-pub fn gen_random<const N: usize>(rnd: &mut ThreadRng, celling: &BigUint) -> [BigUint; N] {
-    generate(|_| rnd.gen_biguint_below(celling))
+pub fn gen_random<const N: usize>(celling: &BigUint) -> [BigUint; N] {
+    generate(|_| rand::thread_rng().gen_biguint_below(celling))
 }
 
 pub fn convert<F, const N: usize>(bs: &[BigUint; N], mut f: F) -> [BigUint; N]

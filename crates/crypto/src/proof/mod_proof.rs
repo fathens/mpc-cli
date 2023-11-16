@@ -47,10 +47,9 @@ impl ProofMod {
 
     pub fn new(session: &Bytes, n: &BigUint, p: &BigUint, q: &BigUint) -> Result<Self> {
         let phi = (p - 1_u8) * (q - 1_u8);
-        let mut rnd = rand::thread_rng();
 
         // Fig 16.1
-        let w = get_random_quadratic_non_residue(&mut rnd, n).map_err(CryptoError::from)?;
+        let w = get_random_quadratic_non_residue(n).map_err(CryptoError::from)?;
 
         // Fig 16.2
         let y = Self::mk_ys(session, n, &w);
@@ -209,10 +208,9 @@ mod tests {
 
     #[test]
     fn proof_mod_bytes() {
-        let mut rnd = rand::thread_rng();
-        let p = get_random_prime_int(&mut rnd, BIT_SIZE as u64).unwrap();
-        let q = get_random_prime_int(&mut rnd, BIT_SIZE as u64).unwrap();
-        let n = get_random_prime_int(&mut rnd, BIT_SIZE as u64).unwrap();
+        let p = get_random_prime_int(BIT_SIZE as u64).unwrap();
+        let q = get_random_prime_int(BIT_SIZE as u64).unwrap();
+        let n = get_random_prime_int(BIT_SIZE as u64).unwrap();
         let session = Bytes::from_static(b"test");
         let proof = ProofMod::new(&session, &n, &p, &q).unwrap();
         let bytes: [Bytes; ProofMod::SIZE] = proof.clone().into();

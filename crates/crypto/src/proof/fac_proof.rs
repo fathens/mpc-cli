@@ -85,7 +85,7 @@ impl ProofFac {
         let mu = &rnd.gen_biguint_below(q_ncap);
         let nu = &rnd.gen_biguint_below(q_ncap);
         let sigma = rnd.gen_biguint_below(q_n0_ncap);
-        let r = &random::get_random_positive_relatively_prime_int(&mut rnd, q3_n0_ncap)?;
+        let r = &random::get_random_positive_relatively_prime_int(q3_n0_ncap)?;
         let x = &rnd.gen_biguint_below(q3_ncap);
         let y = &rnd.gen_biguint_below(q3_ncap);
 
@@ -224,21 +224,21 @@ mod tests {
     use crypto_bigint::Encoding;
     use k256::Secp256k1;
     use num_traits::ToPrimitive;
-    use rand::rngs::ThreadRng;
 
     const BIT_SIZE: u64 = 128;
 
-    fn gen_proof_fac(rnd: &mut ThreadRng) -> (VerifyParam, (BigUint, BigUint)) {
+    fn gen_proof_fac() -> (VerifyParam, (BigUint, BigUint)) {
         let n_tildei = NTildei::generate(
-            get_random_prime_int(rnd, BIT_SIZE).unwrap(),
-            get_random_prime_int(rnd, BIT_SIZE).unwrap(),
+            get_random_prime_int(BIT_SIZE).unwrap(),
+            get_random_prime_int(BIT_SIZE).unwrap(),
         )
         .unwrap();
 
-        let n0p = get_random_prime_int(rnd, BIT_SIZE).unwrap();
-        let n0q = get_random_prime_int(rnd, BIT_SIZE).unwrap();
+        let n0p = get_random_prime_int(BIT_SIZE).unwrap();
+        let n0q = get_random_prime_int(BIT_SIZE).unwrap();
         let n0 = &n0p * &n0q;
 
+        let mut rnd = rand::thread_rng();
         let bs: Vec<_> = (0..rnd.gen_biguint(8).to_u8().unwrap())
             .flat_map(|_| rnd.gen_biguint(8).to_bytes_be())
             .collect();
@@ -257,9 +257,8 @@ mod tests {
 
     #[test]
     fn proof_fac_verify() {
-        let mut rnd = rand::thread_rng();
         for _ in 0..8 {
-            let (vp, (n0q, n0p)) = gen_proof_fac(&mut rnd);
+            let (vp, (n0q, n0p)) = gen_proof_fac();
             for _ in 0..8 {
                 let sample = ProofFac::new(&vp, &n0p, &n0q).unwrap();
                 let ok = sample.verify(&vp);
@@ -270,8 +269,7 @@ mod tests {
 
     #[test]
     fn proof_fac_bytes() {
-        let mut rnd = rand::thread_rng();
-        let (vp, (n0q, n0p)) = gen_proof_fac(&mut rnd);
+        let (vp, (n0q, n0p)) = gen_proof_fac();
         let sample = ProofFac::new(&vp, &n0p, &n0q).unwrap();
 
         let bytes: [Bytes; ProofFac::SIZE] = sample.clone().into();

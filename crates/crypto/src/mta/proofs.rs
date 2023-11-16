@@ -3,7 +3,6 @@ use elliptic_curve::generic_array::typenum::Unsigned;
 use elliptic_curve::group::Curve;
 use elliptic_curve::{CurveArithmetic, Group, ScalarPrimitive};
 use num_bigint::{BigUint, RandBigInt};
-use rand::prelude::ThreadRng;
 use std::ops::Mul;
 
 pub struct ProofBob {
@@ -51,10 +50,10 @@ where
         pu.to_affine()
     }
 
-    pub fn new(bob: ProofBob, rnd: &mut ThreadRng) -> Self {
+    pub fn new(bob: ProofBob) -> Self {
         let q = Self::n();
         let q3 = q.pow(3);
-        let alpha = rnd.gen_biguint_below(&q3);
+        let alpha = rand::thread_rng().gen_biguint_below(&q3);
         let u = Self::point_mul(&alpha);
 
         Self { bob, u }

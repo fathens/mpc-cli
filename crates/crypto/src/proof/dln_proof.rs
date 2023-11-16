@@ -25,8 +25,7 @@ impl Proof {
     ) -> Proof {
         let mod_n = ModInt::new(n);
         let mod_qp = ModInt::new(&(p * q));
-        let mut rnd = rand::thread_rng();
-        let randoms = Iterations(gen_random(&mut rnd, mod_qp.module()));
+        let randoms = Iterations(gen_random(mod_qp.module()));
         let alpha = Iterations(convert(&randoms.0, |_, r| mod_n.pow(h1, r)));
         let hash = &mk_hash((h1, h2), n, &alpha);
         let t = Iterations(convert(&randoms.0, |i, r| {

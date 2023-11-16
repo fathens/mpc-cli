@@ -17,12 +17,9 @@ impl NTildei {
         if !is_prime(&prime1, Some(30)) || !is_prime(&prime2, Some(30)) {
             return Err(CryptoError::need_primes());
         }
-        let mut rnd = rand::thread_rng();
         let n = prime1 * prime2;
-        let v1 = get_random_generator_of_the_quadratic_residue(&mut rnd, &n)
-            .map_err(CryptoError::from)?;
-        let v2 = get_random_generator_of_the_quadratic_residue(&mut rnd, &n)
-            .map_err(CryptoError::from)?;
+        let v1 = get_random_generator_of_the_quadratic_residue(&n).map_err(CryptoError::from)?;
+        let v2 = get_random_generator_of_the_quadratic_residue(&n).map_err(CryptoError::from)?;
         Ok(NTildei { n, v1, v2 })
     }
 }

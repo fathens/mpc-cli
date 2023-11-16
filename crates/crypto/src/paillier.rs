@@ -204,8 +204,7 @@ impl PublicKey {
         if m >= n {
             return Err(CryptoError::message_too_long());
         }
-        let mut rnd = rand::thread_rng();
-        let x = get_random_positive_relatively_prime_int(&mut rnd, n)?;
+        let x = get_random_positive_relatively_prime_int(n)?;
         let n2 = ModInt::new(&(n * n));
         let gm = n2.pow(&(n + 1_u8), m);
         let xn = n2.pow(&x, n);
