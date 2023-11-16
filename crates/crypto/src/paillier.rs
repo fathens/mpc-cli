@@ -1,4 +1,5 @@
 use crate::hash::hash_sha512_256;
+use crate::utils::point_xy;
 use crate::{CryptoError, Result};
 use common::mod_int::ModInt;
 use common::prime::GermainSafePrime;
@@ -71,9 +72,7 @@ impl Proof {
         C: Curve,
         FieldBytesSize<C>: ModulusSize,
     {
-        let ep = point.to_encoded_point(false);
-        let x = BigUint::from_bytes_be(ep.x().unwrap());
-        let y = BigUint::from_bytes_be(ep.y().unwrap());
+        let (x, y) = point_xy(point);
 
         Self::generate_xs_by_xy(pubkey.n(), k, (&x.to_bytes_be(), &y.to_bytes_be()))
     }

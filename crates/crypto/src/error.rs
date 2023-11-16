@@ -71,8 +71,8 @@ impl CryptoError {
         CryptoError("Malformed message".to_owned())
     }
 
-    pub fn point_overflow() -> CryptoError {
-        CryptoError("Point overflow".to_owned())
+    pub fn field_overflow() -> CryptoError {
+        CryptoError("Field overflow".to_owned())
     }
 }
 
