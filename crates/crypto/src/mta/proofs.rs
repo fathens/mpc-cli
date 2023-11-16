@@ -1,7 +1,14 @@
+use crate::hash::hash_sha512_256i_tagged;
+use crate::utils::point_xy;
+use crate::Result;
+use crate::{paillier, CryptoError};
+use common::mod_int::ModInt;
+use common::random::{get_random_positive_int, get_random_positive_relatively_prime_int};
 use crypto_bigint::Encoding;
 use elliptic_curve::generic_array::typenum::Unsigned;
 use elliptic_curve::group::Curve;
-use elliptic_curve::{CurveArithmetic, Group, ScalarPrimitive};
+use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
+use elliptic_curve::{CurveArithmetic, FieldBytesSize, Group, ScalarPrimitive};
 use num_bigint::{BigUint, RandBigInt};
 use std::ops::Mul;
 
@@ -26,7 +33,145 @@ where
     u: C::AffinePoint,
 }
 
-impl ProofBob {}
+impl ProofBob {
+    pub fn new<C>(
+        session: &[u8],
+        pk: &paillier::PublicKey,
+        n_tilde: &BigUint,
+        h1: &BigUint,
+        h2: &BigUint,
+        c1: &BigUint,
+        c2: &BigUint,
+        x: &BigUint,
+        y: &BigUint,
+        r: &BigUint,
+        point: Option<&C::AffinePoint>,
+    ) -> Result<ProofBob>
+    where
+        C: CurveArithmetic,
+        C::AffinePoint: ToEncodedPoint<C>,
+        FieldBytesSize<C>: ModulusSize,
+    {
+        let n2 = &pk.n().pow(2);
+        let q = &ProofBobWC::<C>::n();
+        let q3 = &q.pow(3);
+        let q7 = &(q3.pow(2) * q);
+
+        let q_n_tilde = &(q * n_tilde);
+        let q3_n_tilde = &(q3 * n_tilde);
+
+        // steps are numbered as shown in Fig. 10, but diverge slightly for Fig. 11
+        // 1.
+        let alpha = &get_random_positive_int(q3).map_err(CryptoError::from)?;
+
+        // 2.
+        let rho = &get_random_positive_int(q_n_tilde).map_err(CryptoError::from)?;
+        let sigma = &get_random_positive_int(q_n_tilde).map_err(CryptoError::from)?;
+        let tau = &get_random_positive_int(q3_n_tilde).map_err(CryptoError::from)?;
+
+        // 3.
+        let rho_prm = &get_random_positive_int(q3_n_tilde).map_err(CryptoError::from)?;
+
+        // 4.
+        let beta = &get_random_positive_relatively_prime_int(pk.n()).map_err(CryptoError::from)?;
+        let gamma = &get_random_positive_int(q7).map_err(CryptoError::from)?;
+
+        // 6.
+        let mod_n_tilde = ModInt::new(n_tilde);
+        let z = mod_n_tilde.mul(&mod_n_tilde.pow(h1, x), &mod_n_tilde.pow(h2, rho));
+
+        // 7.
+        let z_prm = mod_n_tilde.mul(&mod_n_tilde.pow(h1, alpha), &mod_n_tilde.pow(h2, rho_prm));
+
+        // 8.
+        let t = mod_n_tilde.mul(&mod_n_tilde.pow(h1, y), &mod_n_tilde.pow(h2, sigma));
+
+        // 9.
+        let pk_gamma = &(pk.n() + 1_u8);
+        let mod_n2 = ModInt::new(n2);
+        let v = {
+            let a = &mod_n2.pow(c1, alpha);
+            let b = &mod_n2.pow(pk_gamma, gamma);
+            let c = &mod_n2.pow(beta, pk.n());
+            mod_n2.mul(&mod_n2.mul(a, b), c)
+        };
+
+        // 10.
+        let w = mod_n_tilde.mul(&mod_n_tilde.pow(h1, gamma), &mod_n_tilde.pow(h2, tau));
+
+        // 11-12. e'
+        let e = {
+            let list = point
+                .map(|point| {
+                    let (px, py) = point_xy(point);
+                    // 5.
+                    let u = ProofBobWC::<C>::point_mul(alpha);
+                    let (ux, uy) = point_xy(&u);
+                    [
+                        pk.n().clone(),
+                        pk_gamma.clone(),
+                        px,
+                        py,
+                        c1.clone(),
+                        c2.clone(),
+                        ux,
+                        uy,
+                        z.clone(),
+                        z_prm.clone(),
+                        t.clone(),
+                        v.clone(),
+                        w.clone(),
+                    ]
+                    .to_vec()
+                })
+                .unwrap_or_else(|| {
+                    [
+                        pk.n().clone(),
+                        pk_gamma.clone(),
+                        c1.clone(),
+                        c2.clone(),
+                        z.clone(),
+                        z_prm.clone(),
+                        t.clone(),
+                        v.clone(),
+                        w.clone(),
+                    ]
+                    .to_vec()
+                });
+            let hash = hash_sha512_256i_tagged(session, &list);
+            &hash.rejection_sample(q)
+        };
+
+        // 13.
+        let mod_n = ModInt::new(pk.n());
+        let s = mod_n.mul(&mod_n.pow(r, e), beta);
+
+        // 14.
+        let s1 = e * x + alpha;
+
+        // 15.
+        let s2 = e * rho + rho_prm;
+
+        // 16.
+        let t1 = e * y + gamma;
+
+        // 17.
+        let t2 = e * sigma + tau;
+
+        Ok(ProofBob {
+            z,
+            z_prm,
+            t,
+            v,
+            w,
+            s,
+            s1,
+            s2,
+            t1,
+            t2,
+        })
+    }
+}
 
 impl<C> ProofBobWC<C>
 where
@@ -39,11 +184,9 @@ where
 
     pub fn point_mul(k: &BigUint) -> C::AffinePoint {
         let k = k % Self::n();
-        let mut bs = k.to_bytes_be();
-        if bs.len() < C::FieldBytesSize::USIZE {
-            let zeros = vec![0; C::FieldBytesSize::USIZE - bs.len()];
-            bs = [zeros, bs].concat();
-        }
+        let mut bs = k.to_bytes_le();
+        bs.resize(C::FieldBytesSize::USIZE, 0);
+        bs.reverse();
         let sp = ScalarPrimitive::<C>::from_slice(&bs).unwrap();
         let s: C::Scalar = sp.into();
         let pu = C::ProjectivePoint::generator().mul(s);
@@ -118,7 +261,7 @@ mod test {
         for (k, (expected_x, expected_y)) in expected_map {
             let k = BigUint::from_str_radix(k, 10).unwrap();
             let actual = ProofBobWC::<Secp256k1>::point_mul(&k);
-            let (x, y) = crate::utils::point_xy::<_, Secp256k1>(&actual);
+            let (x, y) = point_xy::<_, Secp256k1>(&actual);
             assert_eq!(expected_x, x.to_str_radix(10));
             assert_eq!(expected_y, y.to_str_radix(10));
         }
