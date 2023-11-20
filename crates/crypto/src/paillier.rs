@@ -1,5 +1,5 @@
 use crate::hash::hash_sha512_256;
-use crate::utils::point_xy;
+use crate::utils::ecdsa::point_xy;
 use crate::{CryptoError, Result};
 use common::mod_int::ModInt;
 use common::prime::GermainSafePrime;
