@@ -171,29 +171,21 @@ impl ProofBob {
     }
 }
 
-impl TryFrom<&[Bytes; ProofBob::NUM_PARTS]> for ProofBob {
+impl TryFrom<&[&Bytes; ProofBob::NUM_PARTS]> for ProofBob {
     type Error = CryptoError;
 
-    fn try_from(value: &[Bytes; ProofBob::NUM_PARTS]) -> Result<Self> {
-        let to_biguint = |bs: &Bytes| {
-            if bs.len() == 0 {
-                Err(CryptoError::message_malformed())
-            } else {
-                Ok(BigUint::from_bytes_be(&bs))
-            }
-        };
-
+    fn try_from(value: &[&Bytes; ProofBob::NUM_PARTS]) -> Result<Self> {
         Ok(ProofBob {
-            z: to_biguint(&value[0])?,
-            z_prm: to_biguint(&value[1])?,
-            t: to_biguint(&value[2])?,
-            v: to_biguint(&value[3])?,
-            w: to_biguint(&value[4])?,
-            s: to_biguint(&value[5])?,
-            s1: to_biguint(&value[6])?,
-            s2: to_biguint(&value[7])?,
-            t1: to_biguint(&value[8])?,
-            t2: to_biguint(&value[9])?,
+            z: to_biguint(value[0])?,
+            z_prm: to_biguint(value[1])?,
+            t: to_biguint(value[2])?,
+            v: to_biguint(value[3])?,
+            w: to_biguint(value[4])?,
+            s: to_biguint(value[5])?,
+            s1: to_biguint(value[6])?,
+            s2: to_biguint(value[7])?,
+            t1: to_biguint(value[8])?,
+            t2: to_biguint(value[9])?,
         })
     }
 }
@@ -212,7 +204,7 @@ where
     }
 }
 
-impl<C> TryFrom<&[Bytes; ProofBob::NUM_PARTS_WITH_POINT]> for ProofBobWC<C>
+impl<C> TryFrom<&[&Bytes; ProofBob::NUM_PARTS_WITH_POINT]> for ProofBobWC<C>
 where
     C: CurveArithmetic,
     C::AffinePoint: FromEncodedPoint<C>,
@@ -220,17 +212,23 @@ where
 {
     type Error = CryptoError;
 
-    fn try_from(value: &[Bytes; ProofBob::NUM_PARTS_WITH_POINT]) -> Result<Self> {
-        let bs: Vec<_> = value
-            .to_vec()
-            .into_iter()
-            .take(ProofBob::NUM_PARTS)
-            .collect();
-        let bob = ProofBob::try_from(&bs.try_into().unwrap())?;
-        let x = BigUint::from_bytes_be(&value[10]);
-        let y = BigUint::from_bytes_be(&value[11]);
+    fn try_from(value: &[&Bytes; ProofBob::NUM_PARTS_WITH_POINT]) -> Result<Self> {
+        let bob = ProofBob::try_from(&[
+            value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7],
+            value[8], value[9],
+        ])?;
+        let x = to_biguint(value[10])?;
+        let y = to_biguint(value[11])?;
         let u = ecdsa::xy_point::<C>(&x, &y).ok_or(CryptoError::message_malformed())?;
         Ok(Self { bob, u })
+    }
+}
+
+fn to_biguint(bs: &Bytes) -> Result<BigUint> {
+    if bs.is_empty() {
+        Err(CryptoError::message_malformed())
+    } else {
+        Ok(BigUint::from_bytes_be(&bs))
     }
 }
 
