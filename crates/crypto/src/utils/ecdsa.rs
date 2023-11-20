@@ -28,6 +28,8 @@ where
     (x, y)
 }
 
+/// Returns the point at (x, y).
+/// If x and y are both zero, returns the point at infinity.
 pub fn xy_point<C>(x: &BigUint, y: &BigUint) -> Option<C::AffinePoint>
 where
     C: CurveArithmetic,
