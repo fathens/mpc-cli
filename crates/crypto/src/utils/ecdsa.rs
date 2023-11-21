@@ -1,11 +1,11 @@
 use crypto_bigint::Encoding;
 use elliptic_curve::generic_array::typenum::Unsigned;
 use elliptic_curve::group::Curve as group_Curve;
+use elliptic_curve::ops::MulByGenerator;
 use elliptic_curve::sec1::{EncodedPoint, FromEncodedPoint, ModulusSize, ToEncodedPoint};
 use elliptic_curve::{Curve, CurveArithmetic, FieldBytesSize, Group, ScalarPrimitive};
 use num_bigint::BigUint;
 use num_traits::Zero;
-use std::ops::Mul;
 
 /// Returns the x and y coordinates of the point.
 /// If the point is at infinity, returns (0, 0).
@@ -70,7 +70,16 @@ where
     BigUint::from_bytes_be(n.to_be_bytes().as_ref())
 }
 
-pub fn point_mul<C>(k: &BigUint) -> C::AffinePoint
+pub fn generate_mul<C>(k: &BigUint) -> C::AffinePoint
+where
+    C: CurveArithmetic,
+{
+    let s = to_scalar::<C>(k);
+    let pu = C::ProjectivePoint::mul_by_generator(&s);
+    pu.to_affine()
+}
+
+pub fn to_scalar<C>(k: &BigUint) -> C::Scalar
 where
     C: CurveArithmetic,
 {
@@ -79,9 +88,7 @@ where
     bs.resize(C::FieldBytesSize::USIZE, 0);
     bs.reverse();
     let sp = ScalarPrimitive::<C>::from_slice(&bs).unwrap();
-    let s: C::Scalar = sp.into();
-    let pu = C::ProjectivePoint::generator().mul(s);
-    pu.to_affine()
+    sp.into()
 }
 
 #[cfg(test)]
@@ -141,7 +148,7 @@ mod test {
 
         for (k, (expected_x, expected_y)) in expected_map {
             let k = BigUint::from_str_radix(k, 10).unwrap();
-            let actual = point_mul::<Secp256k1>(&k);
+            let actual = generate_mul::<Secp256k1>(&k);
             let (x, y) = point_xy(&actual);
             assert_eq!(expected_x, x.to_str_radix(10));
             assert_eq!(expected_y, y.to_str_radix(10));

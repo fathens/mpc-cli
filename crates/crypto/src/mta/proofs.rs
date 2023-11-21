@@ -5,9 +5,12 @@ use crate::{paillier, CryptoError};
 use bytes::Bytes;
 use common::mod_int::ModInt;
 use common::random::{get_random_positive_int, get_random_positive_relatively_prime_int};
+use elliptic_curve::ops::MulByGenerator;
 use elliptic_curve::sec1::{FromEncodedPoint, ModulusSize, ToEncodedPoint};
 use elliptic_curve::{CurveArithmetic, FieldBytesSize};
-use num_bigint::{BigUint, RandBigInt};
+use num_bigint::BigUint;
+use num_integer::Integer;
+use num_traits::One;
 
 pub struct ProofBob {
     z: BigUint,
@@ -41,10 +44,211 @@ impl ProofBob {
         hc: &((BigUint, BigUint), (BigUint, BigUint)),
         xy: &(BigUint, BigUint),
         r: &BigUint,
-        point: Option<&C::AffinePoint>,
-    ) -> Result<ProofBob>
+    ) -> Result<Self>
     where
         C: CurveArithmetic,
+        C::AffinePoint: ToEncodedPoint<C>,
+        FieldBytesSize<C>: ModulusSize,
+    {
+        let wc = ProofBobWC::<C>::new(session, pk, n_tilde, hc, xy, r, None)?;
+        Ok(wc.bob)
+    }
+
+    pub fn verify<C>(
+        &self,
+        session: &[u8],
+        pk: &paillier::PublicKey,
+        n_tilde: &BigUint,
+        hc: &((BigUint, BigUint), (BigUint, BigUint)),
+    ) -> bool
+    where
+        C: CurveArithmetic,
+        C::AffinePoint: ToEncodedPoint<C>,
+        FieldBytesSize<C>: ModulusSize,
+    {
+        self.verify_with_wc::<C>(session, pk, n_tilde, hc, None)
+    }
+
+    fn verify_with_wc<C>(
+        &self,
+        session: &[u8],
+        pk: &paillier::PublicKey,
+        n_tilde: &BigUint,
+        hc: &((BigUint, BigUint), (BigUint, BigUint)),
+        xu: Option<(C::AffinePoint, C::AffinePoint)>,
+    ) -> bool
+    where
+        C: CurveArithmetic,
+        C::AffinePoint: ToEncodedPoint<C>,
+        FieldBytesSize<C>: ModulusSize,
+    {
+        let ((h1, h2), (c1, c2)) = hc;
+
+        let n2 = &pk.n().pow(2);
+        let q = &ecdsa::curve_n::<C>();
+        let q3 = &q.pow(3);
+        let q7 = &(q3.pow(2) * q);
+
+        if [
+            (&self.z, n_tilde),
+            (&self.z_prm, n_tilde),
+            (&self.t, n_tilde),
+            (&self.v, n2),
+            (&self.w, n_tilde),
+            (&self.s, pk.n()),
+        ]
+        .into_iter()
+        .any(|(a, b)| a >= b)
+        {
+            return false;
+        }
+
+        if [
+            (&self.z, n_tilde),
+            (&self.z_prm, n_tilde),
+            (&self.t, n_tilde),
+            (&self.v, n2),
+            (&self.w, n_tilde),
+            (&self.s, pk.n()),
+            (&self.v, pk.n()),
+        ]
+        .into_iter()
+        .any(|(a, b)| !a.gcd(b).is_one())
+        {
+            return false;
+        }
+
+        if [&self.s1, &self.s2, &self.t1, &self.t2]
+            .into_iter()
+            .any(|a| a < q)
+        {
+            return false;
+        }
+
+        // 3.
+        if &self.s1 > q3 || &self.t1 > q7 {
+            return false;
+        }
+
+        // 1-2. e'
+        let e = {
+            let list = xu
+                .map(|(x, u)| {
+                    let (xp_x, xp_y) = ecdsa::point_xy(&x);
+                    let (up_x, up_y) = ecdsa::point_xy(&u);
+                    [
+                        pk.n().clone(),
+                        pk.n().clone() + 1_u8,
+                        xp_x,
+                        xp_y,
+                        c1.clone(),
+                        c2.clone(),
+                        up_x,
+                        up_y,
+                        self.z.clone(),
+                        self.z_prm.clone(),
+                        self.t.clone(),
+                        self.v.clone(),
+                        self.w.clone(),
+                    ]
+                    .to_vec()
+                })
+                .unwrap_or_else(|| {
+                    [
+                        pk.n().clone(),
+                        pk.n().clone() + 1_u8,
+                        c1.clone(),
+                        c2.clone(),
+                        self.z.clone(),
+                        self.z_prm.clone(),
+                        self.t.clone(),
+                        self.v.clone(),
+                        self.w.clone(),
+                    ]
+                    .to_vec()
+                });
+            let hash = hash_sha512_256i_tagged(session, &list);
+            &hash.rejection_sample(q)
+        };
+
+        // 4.
+        if xu.iter().any(|(x, u)| {
+            let e = ecdsa::to_scalar::<C>(e);
+            let s1 = ecdsa::to_scalar::<C>(&self.s1);
+            C::ProjectivePoint::mul_by_generator(&s1) != (C::ProjectivePoint::from(*x) * e + u)
+        }) {
+            return false;
+        }
+
+        let mod_n_tilde = ModInt::new(n_tilde);
+
+        // 5.
+        if mod_n_tilde.mul(
+            &mod_n_tilde.pow(h1, &self.s1),
+            &mod_n_tilde.pow(h2, &self.s2),
+        ) != mod_n_tilde.mul(&mod_n_tilde.pow(&self.z, e), &self.z_prm)
+        {
+            return false;
+        }
+
+        // 6.
+        if mod_n_tilde.mul(
+            &mod_n_tilde.pow(h1, &self.t1),
+            &mod_n_tilde.pow(h2, &self.t2),
+        ) != mod_n_tilde.mul(&mod_n_tilde.pow(&self.t, e), &self.w)
+        {
+            return false;
+        }
+
+        // 7.
+        let mod_n2 = ModInt::new(n2);
+        let c1_exp_s1 = mod_n2.pow(c1, &self.s1);
+        let s_exp_n = mod_n2.pow(&self.s, pk.n());
+        let gamma_exp_t1 = mod_n2.pow(&(pk.n() + 1_u8), &self.t1);
+        let left = mod_n2.mul(&mod_n2.mul(&c1_exp_s1, &s_exp_n), &gamma_exp_t1);
+        let c2_exp_e = mod_n2.pow(c2, e);
+        let right = mod_n2.mul(&c2_exp_e, &self.v);
+        if left != right {
+            return false;
+        }
+
+        true
+    }
+}
+
+impl TryFrom<&[&Bytes; ProofBob::NUM_PARTS]> for ProofBob {
+    type Error = CryptoError;
+
+    fn try_from(value: &[&Bytes; ProofBob::NUM_PARTS]) -> Result<Self> {
+        Ok(ProofBob {
+            z: to_biguint(value[0])?,
+            z_prm: to_biguint(value[1])?,
+            t: to_biguint(value[2])?,
+            v: to_biguint(value[3])?,
+            w: to_biguint(value[4])?,
+            s: to_biguint(value[5])?,
+            s1: to_biguint(value[6])?,
+            s2: to_biguint(value[7])?,
+            t1: to_biguint(value[8])?,
+            t2: to_biguint(value[9])?,
+        })
+    }
+}
+
+impl<C> ProofBobWC<C>
+where
+    C: CurveArithmetic,
+{
+    pub fn new(
+        session: &[u8],
+        pk: &paillier::PublicKey,
+        n_tilde: &BigUint,
+        hc: &((BigUint, BigUint), (BigUint, BigUint)),
+        xy: &(BigUint, BigUint),
+        r: &BigUint,
+        point: Option<&C::AffinePoint>,
+    ) -> Result<Self>
+    where
         C::AffinePoint: ToEncodedPoint<C>,
         FieldBytesSize<C>: ModulusSize,
     {
@@ -61,6 +265,7 @@ impl ProofBob {
         // steps are numbered as shown in Fig. 10, but diverge slightly for Fig. 11
         // 1.
         let alpha = &get_random_positive_int(q3).map_err(CryptoError::from)?;
+        let u = ecdsa::generate_mul::<C>(alpha);
 
         // 2.
         let rho = &get_random_positive_int(q_n_tilde).map_err(CryptoError::from)?;
@@ -103,7 +308,6 @@ impl ProofBob {
                 .map(|point| {
                     let (px, py) = ecdsa::point_xy(point);
                     // 5.
-                    let u = ecdsa::point_mul::<C>(alpha);
                     let (ux, uy) = ecdsa::point_xy(&u);
                     [
                         pk.n().clone(),
@@ -156,7 +360,7 @@ impl ProofBob {
         // 17.
         let t2 = e * sigma + tau;
 
-        Ok(ProofBob {
+        let bob = ProofBob {
             z,
             z_prm,
             t,
@@ -167,40 +371,24 @@ impl ProofBob {
             s2,
             t1,
             t2,
-        })
+        };
+        Ok(Self { bob, u })
     }
-}
 
-impl TryFrom<&[&Bytes; ProofBob::NUM_PARTS]> for ProofBob {
-    type Error = CryptoError;
-
-    fn try_from(value: &[&Bytes; ProofBob::NUM_PARTS]) -> Result<Self> {
-        Ok(ProofBob {
-            z: to_biguint(value[0])?,
-            z_prm: to_biguint(value[1])?,
-            t: to_biguint(value[2])?,
-            v: to_biguint(value[3])?,
-            w: to_biguint(value[4])?,
-            s: to_biguint(value[5])?,
-            s1: to_biguint(value[6])?,
-            s2: to_biguint(value[7])?,
-            t1: to_biguint(value[8])?,
-            t2: to_biguint(value[9])?,
-        })
-    }
-}
-
-impl<C> ProofBobWC<C>
-where
-    C: CurveArithmetic,
-{
-    pub fn new(bob: ProofBob) -> Self {
-        let q = ecdsa::curve_n::<C>();
-        let q3 = q.pow(3);
-        let alpha = rand::thread_rng().gen_biguint_below(&q3);
-        let u = ecdsa::point_mul::<C>(&alpha);
-
-        Self { bob, u }
+    pub fn verify(
+        &self,
+        session: &[u8],
+        pk: &paillier::PublicKey,
+        n_tilde: &BigUint,
+        hc: &((BigUint, BigUint), (BigUint, BigUint)),
+        x: C::AffinePoint,
+    ) -> bool
+    where
+        C::AffinePoint: ToEncodedPoint<C>,
+        FieldBytesSize<C>: ModulusSize,
+    {
+        self.bob
+            .verify_with_wc::<C>(session, pk, n_tilde, hc, Some((x, self.u)))
     }
 }
 
@@ -228,7 +416,7 @@ fn to_biguint(bs: &Bytes) -> Result<BigUint> {
     if bs.is_empty() {
         Err(CryptoError::message_malformed())
     } else {
-        Ok(BigUint::from_bytes_be(&bs))
+        Ok(BigUint::from_bytes_be(bs))
     }
 }
 
