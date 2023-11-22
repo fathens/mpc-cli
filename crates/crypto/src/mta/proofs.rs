@@ -12,6 +12,7 @@ use num_bigint::BigUint;
 use num_integer::Integer;
 use num_traits::One;
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ProofBob {
     z: BigUint,
     z_prm: BigUint,
@@ -25,6 +26,7 @@ pub struct ProofBob {
     t2: BigUint,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ProofBobWC<C>
 where
     C: CurveArithmetic,
@@ -33,8 +35,9 @@ where
     u: C::AffinePoint,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ParamOfProofBob {
-    session: Bytes,
+    pub session: Bytes,
     pub pk: paillier::PublicKey,
     pub n_tilde: BigUint,
     pub h1: BigUint,
@@ -201,13 +204,11 @@ impl ProofBob {
 
         // 7.
         let mod_n2 = ModInt::new(n2);
-        let c1_exp_s1 = mod_n2.pow(c1, &self.s1);
-        let s_exp_n = mod_n2.pow(&self.s, pk.n());
-        let gamma_exp_t1 = mod_n2.pow(&(pk.n() + 1_u8), &self.t1);
-        let left = mod_n2.mul(&mod_n2.mul(&c1_exp_s1, &s_exp_n), &gamma_exp_t1);
-        let c2_exp_e = mod_n2.pow(c2, e);
-        let right = mod_n2.mul(&c2_exp_e, &self.v);
-        if left != right {
+        if mod_n2.mul(
+            &mod_n2.mul(&mod_n2.pow(c1, &self.s1), &mod_n2.pow(&self.s, pk.n())),
+            &mod_n2.pow(&(pk.n() + 1_u8), &self.t1),
+        ) != mod_n2.mul(&mod_n2.pow(c2, e), &self.v)
+        {
             return false;
         }
 
@@ -430,6 +431,55 @@ fn to_biguint(bs: &Bytes) -> Result<BigUint> {
 mod test {
     use super::*;
     use k256::Secp256k1;
-    use num_traits::Num;
-    use std::collections::HashMap;
+    use num_bigint::RandBigInt;
+    use rand::RngCore;
+
+    struct Param {
+        bob: ParamOfProofBob,
+        xy: (BigUint, BigUint),
+        r: BigUint,
+    }
+
+    fn gen_param() -> Param {
+        const BITS: u64 = 2048;
+        let mut rnd = rand::thread_rng();
+        let mut bs = [0_u8; 32];
+        rnd.fill_bytes(&mut bs);
+        let session = Bytes::from(bs.to_vec());
+        let pk = paillier::PrivateKey::generate(BITS).public_key().to_owned();
+        let n2 = ModInt::new(&pk.n().pow(2));
+
+        let q = ecdsa::curve_n::<Secp256k1>();
+        let q5 = &q.pow(5);
+        let beta_prm = rnd.gen_biguint_below(q5);
+        let ct = pk.encrypt(&beta_prm).unwrap();
+        let b = rnd.gen_biguint_below(n2.module());
+
+        let n_tilde = rnd.gen_biguint(BITS);
+        let h1 = rnd.gen_biguint(BITS);
+        let h2 = rnd.gen_biguint(BITS);
+        let c1 = rnd.gen_biguint_below(n2.module());
+        let c2 = n2.mul(&n2.pow(&b, &c1), &rnd.gen_biguint_below(n2.module()));
+        let bob = ParamOfProofBob {
+            session,
+            pk,
+            n_tilde,
+            h1,
+            h2,
+            c1,
+            c2,
+        };
+        Param {
+            bob,
+            xy: (b, beta_prm),
+            r: ct.randomness,
+        }
+    }
+
+    #[test]
+    fn proofbob_new_and_verify() {
+        let param = gen_param();
+        let proof = ProofBob::new::<Secp256k1>(&param.bob, &param.xy, &param.r).unwrap();
+        assert!(proof.verify::<Secp256k1>(&param.bob));
+    }
 }

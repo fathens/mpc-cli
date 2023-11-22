@@ -12,10 +12,12 @@ use num_modular::{ModularPow, ModularUnaryOps};
 use num_traits::{One, ToPrimitive};
 use rayon::prelude::*;
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PublicKey {
     n: BigUint,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PrivateKey {
     public_key: PublicKey,
     p: BigUint, // p > q
@@ -24,6 +26,7 @@ pub struct PrivateKey {
     lambda_n: BigUint, // lcm(p-1, q-1)
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct EncryptedMessage {
     pub cypher: BigUint,
     pub randomness: BigUint,
