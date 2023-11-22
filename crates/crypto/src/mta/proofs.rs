@@ -33,48 +33,42 @@ where
     u: C::AffinePoint,
 }
 
+pub struct ParamOfProofBob {
+    session: Bytes,
+    pub pk: paillier::PublicKey,
+    pub n_tilde: BigUint,
+    pub h1: BigUint,
+    pub h2: BigUint,
+    pub c1: BigUint,
+    pub c2: BigUint,
+}
+
 impl ProofBob {
     const NUM_PARTS: usize = 10;
     const NUM_PARTS_WITH_POINT: usize = ProofBob::NUM_PARTS + 2;
 
-    pub fn new<C>(
-        session: &[u8],
-        pk: &paillier::PublicKey,
-        n_tilde: &BigUint,
-        hc: &((BigUint, BigUint), (BigUint, BigUint)),
-        xy: &(BigUint, BigUint),
-        r: &BigUint,
-    ) -> Result<Self>
+    pub fn new<C>(param: &ParamOfProofBob, xy: &(BigUint, BigUint), r: &BigUint) -> Result<Self>
     where
         C: CurveArithmetic,
         C::AffinePoint: ToEncodedPoint<C>,
         FieldBytesSize<C>: ModulusSize,
     {
-        let wc = ProofBobWC::<C>::new(session, pk, n_tilde, hc, xy, r, None)?;
+        let wc = ProofBobWC::<C>::create(param, xy, r, None)?;
         Ok(wc.bob)
     }
 
-    pub fn verify<C>(
-        &self,
-        session: &[u8],
-        pk: &paillier::PublicKey,
-        n_tilde: &BigUint,
-        hc: &((BigUint, BigUint), (BigUint, BigUint)),
-    ) -> bool
+    pub fn verify<C>(&self, param: &ParamOfProofBob) -> bool
     where
         C: CurveArithmetic,
         C::AffinePoint: ToEncodedPoint<C>,
         FieldBytesSize<C>: ModulusSize,
     {
-        self.verify_with_wc::<C>(session, pk, n_tilde, hc, None)
+        self.verify_with_wc::<C>(param, None)
     }
 
     fn verify_with_wc<C>(
         &self,
-        session: &[u8],
-        pk: &paillier::PublicKey,
-        n_tilde: &BigUint,
-        hc: &((BigUint, BigUint), (BigUint, BigUint)),
+        param: &ParamOfProofBob,
         xu: Option<(C::AffinePoint, C::AffinePoint)>,
     ) -> bool
     where
@@ -82,7 +76,12 @@ impl ProofBob {
         C::AffinePoint: ToEncodedPoint<C>,
         FieldBytesSize<C>: ModulusSize,
     {
-        let ((h1, h2), (c1, c2)) = hc;
+        let h1 = &param.h1;
+        let h2 = &param.h2;
+        let c1 = &param.c1;
+        let c2 = &param.c2;
+        let n_tilde = &param.n_tilde;
+        let pk = &param.pk;
 
         let n2 = &pk.n().pow(2);
         let q = &ecdsa::curve_n::<C>();
@@ -167,7 +166,7 @@ impl ProofBob {
                     ]
                     .to_vec()
                 });
-            let hash = hash_sha512_256i_tagged(session, &list);
+            let hash = hash_sha512_256i_tagged(&param.session, &list);
             &hash.rejection_sample(q)
         };
 
@@ -240,10 +239,20 @@ where
     C: CurveArithmetic,
 {
     pub fn new(
-        session: &[u8],
-        pk: &paillier::PublicKey,
-        n_tilde: &BigUint,
-        hc: &((BigUint, BigUint), (BigUint, BigUint)),
+        param: &ParamOfProofBob,
+        xy: &(BigUint, BigUint),
+        r: &BigUint,
+        point: &C::AffinePoint,
+    ) -> Result<Self>
+    where
+        C::AffinePoint: ToEncodedPoint<C>,
+        FieldBytesSize<C>: ModulusSize,
+    {
+        Self::create(param, xy, r, Some(point))
+    }
+
+    fn create(
+        param: &ParamOfProofBob,
         xy: &(BigUint, BigUint),
         r: &BigUint,
         point: Option<&C::AffinePoint>,
@@ -252,7 +261,12 @@ where
         C::AffinePoint: ToEncodedPoint<C>,
         FieldBytesSize<C>: ModulusSize,
     {
-        let ((h1, h2), (c1, c2)) = hc;
+        let h1 = &param.h1;
+        let h2 = &param.h2;
+        let c1 = &param.c1;
+        let c2 = &param.c2;
+        let n_tilde = &param.n_tilde;
+        let pk = &param.pk;
         let (x, y) = xy;
         let n2 = &pk.n().pow(2);
         let q = &ecdsa::curve_n::<C>();
@@ -340,7 +354,7 @@ where
                     ]
                     .to_vec()
                 });
-            let hash = hash_sha512_256i_tagged(session, &list);
+            let hash = hash_sha512_256i_tagged(&param.session, &list);
             &hash.rejection_sample(q)
         };
 
@@ -375,20 +389,12 @@ where
         Ok(Self { bob, u })
     }
 
-    pub fn verify(
-        &self,
-        session: &[u8],
-        pk: &paillier::PublicKey,
-        n_tilde: &BigUint,
-        hc: &((BigUint, BigUint), (BigUint, BigUint)),
-        x: C::AffinePoint,
-    ) -> bool
+    pub fn verify(&self, param: &ParamOfProofBob, x: C::AffinePoint) -> bool
     where
         C::AffinePoint: ToEncodedPoint<C>,
         FieldBytesSize<C>: ModulusSize,
     {
-        self.bob
-            .verify_with_wc::<C>(session, pk, n_tilde, hc, Some((x, self.u)))
+        self.bob.verify_with_wc::<C>(param, Some((x, self.u)))
     }
 }
 
