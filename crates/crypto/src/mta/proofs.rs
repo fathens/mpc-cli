@@ -1,5 +1,5 @@
 use crate::hash::hash_sha512_256i_tagged;
-use crate::utils::ecdsa;
+use crate::utils::{ecdsa, NTildei};
 use crate::Result;
 use crate::{paillier, CryptoError};
 use bytes::Bytes;
@@ -39,9 +39,7 @@ where
 pub struct ParamOfProofBob {
     pub session: Bytes,
     pub pk: paillier::PublicKey,
-    pub n_tilde: BigUint,
-    pub h1: BigUint,
-    pub h2: BigUint,
+    pub n_tilde: NTildei,
     pub c1: BigUint,
     pub c2: BigUint,
 }
@@ -79,11 +77,11 @@ impl ProofBob {
         C::AffinePoint: ToEncodedPoint<C>,
         FieldBytesSize<C>: ModulusSize,
     {
-        let h1 = &param.h1;
-        let h2 = &param.h2;
+        let h1 = &param.n_tilde.v1;
+        let h2 = &param.n_tilde.v2;
         let c1 = &param.c1;
         let c2 = &param.c2;
-        let n_tilde = &param.n_tilde;
+        let n_tilde = &param.n_tilde.n;
         let pk = &param.pk;
 
         let n2 = &pk.n().pow(2);
@@ -262,11 +260,11 @@ where
         C::AffinePoint: ToEncodedPoint<C>,
         FieldBytesSize<C>: ModulusSize,
     {
-        let h1 = &param.h1;
-        let h2 = &param.h2;
+        let h1 = &param.n_tilde.v1;
+        let h2 = &param.n_tilde.v2;
         let c1 = &param.c1;
         let c2 = &param.c2;
-        let n_tilde = &param.n_tilde;
+        let n_tilde = &param.n_tilde.n;
         let pk = &param.pk;
         let (x, y) = xy;
         let n2 = &pk.n().pow(2);
@@ -447,25 +445,20 @@ mod test {
         rnd.fill_bytes(&mut bs);
         let session = Bytes::from(bs.to_vec());
         let pk = paillier::PrivateKey::generate(BITS).public_key().to_owned();
-        let n2 = ModInt::new(&pk.n().pow(2));
 
         let q = ecdsa::curve_n::<Secp256k1>();
         let q5 = &q.pow(5);
         let beta_prm = rnd.gen_biguint_below(q5);
         let ct = pk.encrypt(&beta_prm).unwrap();
-        let b = rnd.gen_biguint_below(n2.module());
+        let b = rnd.gen_biguint_below(pk.n());
 
-        let n_tilde = rnd.gen_biguint(BITS);
-        let h1 = rnd.gen_biguint(BITS);
-        let h2 = rnd.gen_biguint(BITS);
-        let c1 = rnd.gen_biguint_below(n2.module());
-        let c2 = n2.mul(&n2.pow(&b, &c1), &rnd.gen_biguint_below(n2.module()));
+        let n_tilde = NTildei::generate_for_test()[0].to_owned();
+        let c1 = pk.encrypt(&rnd.gen_biguint_below(pk.n())).unwrap().cypher;
+        let c2 = pk.homo_add(&pk.homo_mult(&b, &c1), &ct.cypher);
         let bob = ParamOfProofBob {
             session,
             pk,
             n_tilde,
-            h1,
-            h2,
             c1,
             c2,
         };
@@ -479,7 +472,9 @@ mod test {
     #[test]
     fn proofbob_new_and_verify() {
         let param = gen_param();
-        let proof = ProofBob::new::<Secp256k1>(&param.bob, &param.xy, &param.r).unwrap();
+        let proof_new = ProofBob::new::<Secp256k1>(&param.bob, &param.xy, &param.r);
+        assert_eq!(None, proof_new.clone().err());
+        let proof = proof_new.unwrap();
         assert!(proof.verify::<Secp256k1>(&param.bob));
     }
 }
