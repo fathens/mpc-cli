@@ -217,6 +217,20 @@ impl PublicKey {
             randomness: x,
         })
     }
+
+    pub fn homo_mult(&self, m: &BigUint, c1: &BigUint) -> BigUint {
+        let m = m % self.n();
+        let mod_n2 = ModInt::new(&self.n().pow(2));
+        let c1 = c1 % mod_n2.module();
+        mod_n2.pow(&c1, &m)
+    }
+
+    pub fn homo_add(&self, c1: &BigUint, c2: &BigUint) -> BigUint {
+        let mod_n2 = ModInt::new(&self.n().pow(2));
+        let c1 = c1 % mod_n2.module();
+        let c2 = c2 % mod_n2.module();
+        mod_n2.mul(&c1, &c2)
+    }
 }
 
 #[cfg(test)]
