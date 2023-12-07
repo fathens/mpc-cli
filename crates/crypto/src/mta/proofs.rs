@@ -11,6 +11,24 @@ use elliptic_curve::{CurveArithmetic, FieldBytesSize};
 use num_bigint::BigUint;
 use num_integer::Integer;
 use num_traits::One;
+use once_cell::sync::Lazy;
+use slog::*;
+use slog_async;
+use slog_term;
+
+static LOGGER: Lazy<Logger> = Lazy::new(|| {
+    let drain = slog_term::FullFormat::new(slog_term::TermDecorator::new().build())
+        .build()
+        .fuse();
+    // let drain = Mutex::new(slog_json::Json::default(io::stdout())).fuse();
+    let drain = slog_async::Async::new(drain).build().fuse();
+    Logger::root(
+        drain,
+        o!(
+            "version" => env!("CARGO_PKG_VERSION")
+        ),
+    )
+});
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ProofBob {
@@ -100,6 +118,7 @@ impl ProofBob {
         .into_iter()
         .any(|(a, b)| a >= b)
         {
+            warn!(LOGGER, "ProofBob: check a < b");
             return false;
         }
 
@@ -115,6 +134,7 @@ impl ProofBob {
         .into_iter()
         .any(|(a, b)| !a.gcd(b).is_one())
         {
+            warn!(LOGGER, "ProofBob: check gcd(a, b) == 1");
             return false;
         }
 
@@ -122,11 +142,28 @@ impl ProofBob {
             .into_iter()
             .any(|a| a < q)
         {
+            warn!(LOGGER, "ProofBob: check s1, s2, t1, t2 < q";
+                "s1" => %(&self.s1),
+                "s2" => %(&self.s2),
+                "t1" => %(&self.t1),
+                "t2" => %(&self.t2),
+            );
             return false;
         }
 
         // 3.
-        if &self.s1 > q3 || &self.t1 > q7 {
+        if &self.s1 > q3 {
+            warn!(LOGGER, "ProofBob: check s1 < q3";
+                "s1" => %(&self.s1),
+                "q3" => %q3,
+            );
+            return false;
+        }
+        if &self.t1 > q7 {
+            warn!(LOGGER, "ProofBob: check t1 < q7";
+                "t1" => %(&self.t1),
+                "q7" => %q7,
+            );
             return false;
         }
 
@@ -177,6 +214,7 @@ impl ProofBob {
             let s1 = ecdsa::to_scalar::<C>(&self.s1);
             C::ProjectivePoint::mul_by_generator(&s1) != (C::ProjectivePoint::from(*x) * e + u)
         }) {
+            warn!(LOGGER, "ProofBob: check x * e + u == s1 * G");
             return false;
         }
 
@@ -188,6 +226,15 @@ impl ProofBob {
             &mod_n_tilde.pow(h2, &self.s2),
         ) != mod_n_tilde.mul(&mod_n_tilde.pow(&self.z, e), &self.z_prm)
         {
+            warn!(LOGGER, "ProofBob: check z^e * z_prm == h1^s1 * h2^s2";
+                "z" => %(&self.z),
+                "z_prm" => %(&self.z_prm),
+                "h1" => %h1,
+                "h2" => %h2,
+                "s1" => %(&self.s1),
+                "s2" => %(&self.s2),
+                "e" => %e,
+            );
             return false;
         }
 
@@ -197,18 +244,34 @@ impl ProofBob {
             &mod_n_tilde.pow(h2, &self.t2),
         ) != mod_n_tilde.mul(&mod_n_tilde.pow(&self.t, e), &self.w)
         {
+            warn!(LOGGER, "ProofBob: check t^e * w == h1^t1 * h2^t2";
+                "t" => %(&self.t),
+                "w" => %(&self.w),
+                "h1" => %h1,
+                "h2" => %h2,
+                "t1" => %(&self.t1),
+                "t2" => %(&self.t2),
+                "e" => %e,
+            );
             return false;
         }
 
         // 7.
-        let mod_n2 = ModInt::new(n2);
-        if mod_n2.mul(
-            &mod_n2.mul(&mod_n2.pow(c1, &self.s1), &mod_n2.pow(&self.s, pk.n())),
-            &mod_n2.pow(&(pk.n() + 1_u8), &self.t1),
-        ) != mod_n2.mul(&mod_n2.pow(c2, e), &self.v)
         {
-            return false;
-        }
+            let mod_n2 = ModInt::new(n2);
+            let left = mod_n2.mul(
+                &mod_n2.mul(&mod_n2.pow(c1, &self.s1), &mod_n2.pow(&self.s, pk.n())),
+                &mod_n2.pow(&(pk.n() + 1_u8), &self.t1),
+            );
+            let right = mod_n2.mul(&mod_n2.pow(c2, e), &self.v);
+            if left != right {
+                warn!(LOGGER, "ProofBob: check c1^s1 * s^n * (n + 1)^t1 == c2^e * v";
+                    "left" => %left,
+                    "right" => %right,
+                );
+                return false;
+            }
+        };
 
         true
     }
