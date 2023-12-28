@@ -198,6 +198,11 @@ impl PrivateKey {
 }
 
 impl PublicKey {
+    #[cfg(test)]
+    pub fn new(n: BigUint) -> Self {
+        Self { n }
+    }
+
     pub fn n(&self) -> &BigUint {
         &self.n
     }
