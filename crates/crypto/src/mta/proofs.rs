@@ -680,16 +680,19 @@ mod test {
             let proof_new = ProofBobWC::new(&param.bob, &param.xy, &param.r, &param.point);
             assert_eq!(None, proof_new.clone().err());
             let proofwc: ProofBobWC<Secp256k1> = proof_new.unwrap();
-            assert!(proofwc.verify(&param.bob, &param.point));
 
-            assert!(!proofwc.verify(&param.change_session().bob, &param.point));
-            assert!(!proofwc.verify(&param.change_pk().bob, &param.point));
-            assert!(!proofwc.verify(&param.change_ntilde_n().bob, &param.point));
-            assert!(!proofwc.verify(&param.change_ntilde_v1().bob, &param.point));
-            assert!(!proofwc.verify(&param.change_ntilde_v2().bob, &param.point));
-            assert!(!proofwc.verify(&param.change_c1().bob, &param.point));
-            assert!(!proofwc.verify(&param.change_c2().bob, &param.point));
-            assert!(!proofwc.verify(&param.bob, &param.change_point().point));
+            let verify = |p: &Param| proofwc.verify(&p.bob, &p.point);
+
+            assert!(verify(param));
+
+            assert!(!verify(&param.change_session()));
+            assert!(!verify(&param.change_pk()));
+            assert!(!verify(&param.change_ntilde_n()));
+            assert!(!verify(&param.change_ntilde_v1()));
+            assert!(!verify(&param.change_ntilde_v2()));
+            assert!(!verify(&param.change_c1()));
+            assert!(!verify(&param.change_c2()));
+            assert!(!verify(&param.change_point()));
         }
     }
 
