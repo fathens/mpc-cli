@@ -143,10 +143,10 @@ impl ProofBob {
             .any(|a| a < q)
         {
             warn!(LOGGER, "ProofBob: check s1, s2, t1, t2 < q";
-                "s1" => %(&self.s1),
-                "s2" => %(&self.s2),
-                "t1" => %(&self.t1),
-                "t2" => %(&self.t2),
+                "s1" => %&self.s1,
+                "s2" => %&self.s2,
+                "t1" => %&self.t1,
+                "t2" => %&self.t2,
             );
             return false;
         }
@@ -154,14 +154,14 @@ impl ProofBob {
         // 3.
         if &self.s1 > q3 {
             warn!(LOGGER, "ProofBob: check s1 < q3";
-                "s1" => %(&self.s1),
+                "s1" => %&self.s1,
                 "q3" => %q3,
             );
             return false;
         }
         if &self.t1 > q7 {
             warn!(LOGGER, "ProofBob: check t1 < q7";
-                "t1" => %(&self.t1),
+                "t1" => %&self.t1,
                 "q7" => %q7,
             );
             return false;
@@ -228,12 +228,12 @@ impl ProofBob {
         ) != mod_n_tilde.mul(&mod_n_tilde.pow(&self.z, e), &self.z_prm)
         {
             warn!(LOGGER, "ProofBob: check z^e * z_prm == h1^s1 * h2^s2";
-                "z" => %(&self.z),
-                "z_prm" => %(&self.z_prm),
+                "z" => %&self.z,
+                "z_prm" => %&self.z_prm,
                 "h1" => %h1,
                 "h2" => %h2,
-                "s1" => %(&self.s1),
-                "s2" => %(&self.s2),
+                "s1" => %&self.s1,
+                "s2" => %&self.s2,
                 "e" => %e,
             );
             return false;
@@ -246,12 +246,12 @@ impl ProofBob {
         ) != mod_n_tilde.mul(&mod_n_tilde.pow(&self.t, e), &self.w)
         {
             warn!(LOGGER, "ProofBob: check t^e * w == h1^t1 * h2^t2";
-                "t" => %(&self.t),
-                "w" => %(&self.w),
+                "t" => %&self.t,
+                "w" => %&self.w,
                 "h1" => %h1,
                 "h2" => %h2,
-                "t1" => %(&self.t1),
-                "t2" => %(&self.t2),
+                "t1" => %&self.t1,
+                "t2" => %&self.t2,
                 "e" => %e,
             );
             return false;
