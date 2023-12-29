@@ -278,21 +278,38 @@ impl ProofBob {
     }
 }
 
-impl TryFrom<&[&Bytes; ProofBob::NUM_PARTS]> for ProofBob {
+impl From<ProofBob> for [Bytes; ProofBob::NUM_PARTS] {
+    fn from(pb: ProofBob) -> Self {
+        [
+            pb.z.to_bytes_be().into(),
+            pb.z_prm.to_bytes_be().into(),
+            pb.t.to_bytes_be().into(),
+            pb.v.to_bytes_be().into(),
+            pb.w.to_bytes_be().into(),
+            pb.s.to_bytes_be().into(),
+            pb.s1.to_bytes_be().into(),
+            pb.s2.to_bytes_be().into(),
+            pb.t1.to_bytes_be().into(),
+            pb.t2.to_bytes_be().into(),
+        ]
+    }
+}
+
+impl TryFrom<[Bytes; ProofBob::NUM_PARTS]> for ProofBob {
     type Error = CryptoError;
 
-    fn try_from(value: &[&Bytes; ProofBob::NUM_PARTS]) -> Result<Self> {
+    fn try_from(value: [Bytes; ProofBob::NUM_PARTS]) -> Result<Self> {
         Ok(ProofBob {
-            z: to_biguint(value[0])?,
-            z_prm: to_biguint(value[1])?,
-            t: to_biguint(value[2])?,
-            v: to_biguint(value[3])?,
-            w: to_biguint(value[4])?,
-            s: to_biguint(value[5])?,
-            s1: to_biguint(value[6])?,
-            s2: to_biguint(value[7])?,
-            t1: to_biguint(value[8])?,
-            t2: to_biguint(value[9])?,
+            z: to_biguint(&value[0])?,
+            z_prm: to_biguint(&value[1])?,
+            t: to_biguint(&value[2])?,
+            v: to_biguint(&value[3])?,
+            w: to_biguint(&value[4])?,
+            s: to_biguint(&value[5])?,
+            s1: to_biguint(&value[6])?,
+            s2: to_biguint(&value[7])?,
+            t1: to_biguint(&value[8])?,
+            t2: to_biguint(&value[9])?,
         })
     }
 }
@@ -461,7 +478,22 @@ where
     }
 }
 
-impl<C> TryFrom<&[&Bytes; ProofBob::NUM_PARTS_WITH_POINT]> for ProofBobWC<C>
+impl<C> From<ProofBobWC<C>> for [Bytes; ProofBob::NUM_PARTS_WITH_POINT]
+where
+    C: CurveArithmetic,
+    C::AffinePoint: ToEncodedPoint<C>,
+    FieldBytesSize<C>: ModulusSize,
+{
+    fn from(pb: ProofBobWC<C>) -> Self {
+        let bob: [Bytes; ProofBob::NUM_PARTS] = pb.bob.into();
+        let mut base = bob.to_vec();
+        let (x, y) = ecdsa::point_xy(&pb.u);
+        base.extend_from_slice(&[x.to_bytes_be().into(), y.to_bytes_be().into()]);
+        base.try_into().unwrap()
+    }
+}
+
+impl<C> TryFrom<[Bytes; ProofBob::NUM_PARTS_WITH_POINT]> for ProofBobWC<C>
 where
     C: CurveArithmetic,
     C::AffinePoint: FromEncodedPoint<C>,
@@ -469,13 +501,12 @@ where
 {
     type Error = CryptoError;
 
-    fn try_from(value: &[&Bytes; ProofBob::NUM_PARTS_WITH_POINT]) -> Result<Self> {
-        let bob = ProofBob::try_from(&[
-            value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7],
-            value[8], value[9],
-        ])?;
-        let x = to_biguint(value[10])?;
-        let y = to_biguint(value[11])?;
+    fn try_from(value: [Bytes; ProofBob::NUM_PARTS_WITH_POINT]) -> Result<Self> {
+        let src_bob: [Bytes; ProofBob::NUM_PARTS] =
+            value[0..ProofBob::NUM_PARTS].to_vec().try_into().unwrap();
+        let bob = ProofBob::try_from(src_bob)?;
+        let x = to_biguint(&value[10])?;
+        let y = to_biguint(&value[11])?;
         let u = ecdsa::xy_point::<C>(&x, &y).ok_or(CryptoError::message_malformed())?;
         Ok(Self { bob, u })
     }
@@ -561,7 +592,9 @@ mod test {
         }
 
         fn change_point(&self) -> Param {
-            let another = self.point.mul(&ecdsa::to_scalar::<Secp256k1>(&BigUint::from(10u8)));
+            let another = self
+                .point
+                .mul(&ecdsa::to_scalar::<Secp256k1>(&BigUint::from(10u8)));
             let mut result = self.clone();
             result.point = another.to_affine();
             result
@@ -704,5 +737,24 @@ mod test {
     #[test]
     fn proofbobwc_by_gen() {
         loop_proofbobwc_new_and_verify(&Param::gen(), 10)
+    }
+
+    #[test]
+    fn proofbob_bytes() {
+        let param = Param::sample_ok();
+        let src = ProofBob::new::<Secp256k1>(&param.bob, &param.xy, &param.r).unwrap();
+        let bytes: [Bytes; ProofBob::NUM_PARTS] = src.clone().into();
+        let dst = ProofBob::try_from(bytes).unwrap();
+        assert_eq!(src, dst);
+    }
+
+    #[test]
+    fn proofbobwc_bytes() {
+        let param = Param::sample_ok();
+        let src =
+            ProofBobWC::<Secp256k1>::new(&param.bob, &param.xy, &param.r, &param.point).unwrap();
+        let bytes: [Bytes; ProofBob::NUM_PARTS_WITH_POINT] = src.clone().into();
+        let dst = ProofBobWC::try_from(bytes).unwrap();
+        assert_eq!(src, dst);
     }
 }
