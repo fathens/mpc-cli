@@ -561,7 +561,7 @@ mod test {
         }
 
         fn change_point(&self) -> Param {
-            let another = (&self.point).mul(&ecdsa::to_scalar::<Secp256k1>(&BigUint::from(10u8)));
+            let another = self.point.mul(&ecdsa::to_scalar::<Secp256k1>(&BigUint::from(10u8)));
             let mut result = self.clone();
             result.point = another.to_affine();
             result
