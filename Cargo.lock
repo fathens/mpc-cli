@@ -219,6 +219,7 @@ dependencies = [
  "slog-atomic",
  "slog-json",
  "slog-term",
+ "tinyvec",
 ]
 
 [[package]]

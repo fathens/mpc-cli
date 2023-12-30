@@ -26,6 +26,7 @@ slog-async = "2.8.0"
 slog-term = "2.9.0"
 slog-json = "2.6.1"
 slog-atomic = "3.1.0"
+tinyvec = "1.6.0"
 
 [dev-dependencies]
 hex-literal = "0.4.1"
