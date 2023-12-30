@@ -22,8 +22,7 @@ pub mod safe_prime {
     use num_prime::{nt_funcs, PrimalityTestConfig};
     use num_traits::One;
     use rayon::iter::ParallelIterator;
-    use rayon::prelude::IntoParallelRefIterator;
-    use std::iter::repeat_with;
+    use rayon::prelude::IntoParallelIterator;
 
     const CONCURRENT_NUM: usize = 100;
 
@@ -33,9 +32,8 @@ pub mod safe_prime {
     }
 
     pub(super) fn gen_qp(bits: u64) -> (BigUint, BigUint) {
-        let mut rng = rand::thread_rng();
-        let mut do_gen = || {
-            let mut v = rng.gen_biguint(bits - 2);
+        let do_gen = || {
+            let mut v = rand::rngs::ThreadRng::default().gen_biguint(bits - 2);
             v.set_bit(bits - 1, true);
             v.set_bit(bits - 2, true);
             v.set_bit(0, true);
@@ -54,18 +52,19 @@ pub mod safe_prime {
             is_prime(q) && is_prime(p)
         };
 
-        loop {
-            let trials: Vec<_> = repeat_with(&mut do_gen).take(CONCURRENT_NUM).collect();
-            if let Some((q, p)) = trials.par_iter().filter_map(with_delta).find_any(check) {
-                return (q, p);
-            }
-        }
+        (0..)
+            .find_map(|_| {
+                (0..CONCURRENT_NUM).into_par_iter().find_map_any(|_| {
+                    let g = do_gen();
+                    with_delta(g).filter(check)
+                })
+            })
+            .unwrap()
     }
 
     const DELTA_BITS: u64 = 20;
 
-    fn with_delta(origin: &BigUint) -> Option<(BigUint, BigUint)> {
-        let mut q = origin.clone();
+    fn with_delta(mut q: BigUint) -> Option<(BigUint, BigUint)> {
         let times = 1_u32 << (DELTA_BITS - 1);
         for _ in 1..times {
             if simple_check::is_prime(&q) && !(&q % 3_u8).is_one() {
