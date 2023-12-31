@@ -45,16 +45,16 @@ impl VerifyParam {
         sigma: &BigUint,
     ) -> BigUint {
         let list = [
-            self.n0.clone(),
-            self.n_tildei.n.clone(),
-            self.n_tildei.v1.clone(),
-            self.n_tildei.v2.clone(),
-            p.clone(),
-            q.clone(),
-            a.clone(),
-            b.clone(),
-            t.clone(),
-            sigma.clone(),
+            &self.n0,
+            &self.n_tildei.n,
+            &self.n_tildei.v1,
+            &self.n_tildei.v2,
+            &p,
+            &q,
+            &a,
+            &b,
+            &t,
+            &sigma,
         ];
         let eh = hash_sha512_256i_tagged(&self.session, &list);
         eh.rejection_sample(&self.curve_n)

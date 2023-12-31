@@ -113,10 +113,10 @@ impl Proof {
 }
 
 fn mk_hash((h1, h2): (&BigUint, &BigUint), n: &BigUint, alpha: &Iterations) -> BigUint {
-    let mut msg = alpha.0.to_vec();
-    msg.insert(0, n.clone());
-    msg.insert(0, h2.clone());
-    msg.insert(0, h1.clone());
+    let mut msg: Vec<_> = alpha.0.iter().collect();
+    msg.insert(0, n);
+    msg.insert(0, h2);
+    msg.insert(0, h1);
     let c = hash_sha512_256i(msg.as_ref());
     BigUint::from_bytes_be(c.as_ref())
 }

@@ -36,9 +36,12 @@ impl ProofMod {
     }
 
     fn mk_ys(session: &Bytes, n: &BigUint, w: &BigUint) -> Iterations {
-        let mut ys = vec![w.clone(), n.clone()];
+        let seed = &[w.clone(), n.clone()];
+        let mut ys = Vec::with_capacity(Iterations::SIZE + seed.len());
+        ys.extend_from_slice(seed);
         Iterations(generate(|_| {
-            let ei = hash_sha512_256i_tagged(session.as_ref(), &ys);
+            let ints: Vec<_> = ys.iter().collect();
+            let ei = hash_sha512_256i_tagged(session.as_ref(), &ints);
             let v = ei.rejection_sample(n);
             ys.push(v.clone());
             v

@@ -26,7 +26,7 @@ pub struct HashCommitDecommit {
 impl HashDeCommitment {
     pub fn commit(&self) -> HashCommitment {
         let mut parts = self.secrets.to_vec();
-        parts.insert(0, self.salt.clone());
+        parts.insert(0, &self.salt);
         let hash = hash_sha512_256i(&parts);
         HashCommitment(hash)
     }
@@ -98,8 +98,8 @@ impl Secrets {
     const PARTS_CAP: usize = 3;
     const MAX_PART_SIZE: usize = 1024 * 1024; // 1 MB
 
-    pub fn to_vec(&self) -> Vec<BigUint> {
-        self.0.clone()
+    pub fn to_vec(&self) -> Vec<&BigUint> {
+        self.0.iter().collect()
     }
 
     pub fn build(parts: &[&[BigUint]]) -> Result<Secrets> {
@@ -190,7 +190,7 @@ mod tests {
             secrets: secrets.into(),
         };
         let c = d.commit();
-        let hash = hash_sha512_256i(&[salt, s1, s2][..]);
+        let hash = hash_sha512_256i(&[&salt, &s1, &s2]);
         assert_eq!(c.0, hash);
     }
 

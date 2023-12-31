@@ -170,42 +170,44 @@ impl ProofBob {
 
         // 1-2. e'
         let e = {
-            let list = xu
-                .map(|(x, u)| {
-                    let (xp_x, xp_y) = ecdsa::point_xy(x);
-                    let (up_x, up_y) = ecdsa::point_xy(u);
+            let do_hash = |list| hash_sha512_256i_tagged(&param.session, list);
+            let hash = if let Some((x, u)) = xu {
+                let (xp_x, xp_y) = ecdsa::point_xy(x);
+                let (up_x, up_y) = ecdsa::point_xy(u);
+                do_hash(
                     [
-                        pk.n().clone(),
-                        pk.n().clone() + 1_u8,
-                        xp_x,
-                        xp_y,
-                        c1.clone(),
-                        c2.clone(),
-                        up_x,
-                        up_y,
-                        self.z.clone(),
-                        self.z_prm.clone(),
-                        self.t.clone(),
-                        self.v.clone(),
-                        self.w.clone(),
+                        pk.n(),
+                        &(pk.n() + 1_u8),
+                        &xp_x,
+                        &xp_y,
+                        &c1,
+                        &c2,
+                        &up_x,
+                        &up_y,
+                        &self.z,
+                        &self.z_prm,
+                        &self.t,
+                        &self.v,
+                        &self.w,
                     ]
-                    .to_vec()
-                })
-                .unwrap_or_else(|| {
+                    .as_slice(),
+                )
+            } else {
+                do_hash(
                     [
-                        pk.n().clone(),
-                        pk.n().clone() + 1_u8,
-                        c1.clone(),
-                        c2.clone(),
-                        self.z.clone(),
-                        self.z_prm.clone(),
-                        self.t.clone(),
-                        self.v.clone(),
-                        self.w.clone(),
+                        pk.n(),
+                        &(pk.n() + 1_u8),
+                        &c1,
+                        &c2,
+                        &self.z,
+                        &self.z_prm,
+                        &self.t,
+                        &self.v,
+                        &self.w,
                     ]
-                    .to_vec()
-                });
-            let hash = hash_sha512_256i_tagged(&param.session, &list);
+                    .as_slice(),
+                )
+            };
             &hash.rejection_sample(q)
         };
 
@@ -399,44 +401,35 @@ where
         let w = mod_n_tilde.mul(&mod_n_tilde.pow(h1, gamma), &mod_n_tilde.pow(h2, tau));
 
         // 11-12. e'
-        let e = {
-            let list = point
-                .map(|point| {
-                    let (px, py) = ecdsa::point_xy(point);
-                    let (ux, uy) = ecdsa::point_xy(&u);
+        let e = &{
+            let do_hash = |list| {
+                let h = hash_sha512_256i_tagged(&param.session, list);
+                h.rejection_sample(q)
+            };
+            if let Some(point) = point {
+                let (px, py) = ecdsa::point_xy(point);
+                let (ux, uy) = ecdsa::point_xy(&u);
+                do_hash(
                     [
-                        pk.n().clone(),
-                        pk_gamma.clone(),
-                        px,
-                        py,
-                        c1.clone(),
-                        c2.clone(),
-                        ux,
-                        uy,
-                        z.clone(),
-                        z_prm.clone(),
-                        t.clone(),
-                        v.clone(),
-                        w.clone(),
+                        pk.n(),
+                        pk_gamma,
+                        &px,
+                        &py,
+                        c1,
+                        c2,
+                        &ux,
+                        &uy,
+                        &z,
+                        &z_prm,
+                        &t,
+                        &v,
+                        &w,
                     ]
-                    .to_vec()
-                })
-                .unwrap_or_else(|| {
-                    [
-                        pk.n().clone(),
-                        pk_gamma.clone(),
-                        c1.clone(),
-                        c2.clone(),
-                        z.clone(),
-                        z_prm.clone(),
-                        t.clone(),
-                        v.clone(),
-                        w.clone(),
-                    ]
-                    .to_vec()
-                });
-            let hash = hash_sha512_256i_tagged(&param.session, &list);
-            &hash.rejection_sample(q)
+                    .as_slice(),
+                )
+            } else {
+                do_hash([pk.n(), pk_gamma, c1, c2, &z, &z_prm, &t, &v, &w].as_slice())
+            }
         };
 
         // 13.

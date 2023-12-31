@@ -36,7 +36,7 @@ fn sha512_256(tag: Option<&[u8]>, src_list: &[&[u8]]) -> Hash256 {
     Hash256(hasher.finalize().into())
 }
 
-fn sha512_256i(tag: Option<&[u8]>, src_list: &[BigUint]) -> Hash256 {
+fn sha512_256i(tag: Option<&[u8]>, src_list: &[&BigUint]) -> Hash256 {
     let bs_list: Vec<_> = src_list
         .iter()
         .map(|x| if x.is_zero() { vec![] } else { x.to_bytes_be() })
@@ -49,11 +49,11 @@ pub fn hash_sha512_256(src_list: &[&[u8]]) -> Hash256 {
     sha512_256(None, src_list)
 }
 
-pub fn hash_sha512_256i(src_list: &[BigUint]) -> Hash256 {
+pub fn hash_sha512_256i(src_list: &[&BigUint]) -> Hash256 {
     sha512_256i(None, src_list)
 }
 
-pub fn hash_sha512_256i_tagged(tag: &[u8], src_list: &[BigUint]) -> Hash256 {
+pub fn hash_sha512_256i_tagged(tag: &[u8], src_list: &[&BigUint]) -> Hash256 {
     sha512_256i(Some(tag), src_list)
 }
 
@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn hash_bigint() {
-        let one = hash_sha512_256i(&[BigUint::from(12345678_u32)]);
+        let one = hash_sha512_256i(&[&BigUint::from(12345678_u32)]);
         assert_eq!(
             [
                 67, 219, 167, 235, 231, 133, 107, 20, 13, 26, 137, 209, 227, 44, 166, 243, 178,
@@ -92,7 +92,7 @@ mod tests {
             ],
             one.0
         );
-        let two = hash_sha512_256i(&[BigUint::from(12345678_u32), BigUint::from(34567890_u32)]);
+        let two = hash_sha512_256i(&[&BigUint::from(12345678_u32), &BigUint::from(34567890_u32)]);
         assert_eq!(
             [
                 204, 108, 54, 96, 23, 83, 16, 141, 6, 196, 205, 169, 56, 190, 16, 86, 190, 140,
@@ -101,9 +101,9 @@ mod tests {
             two.0
         );
         let three = hash_sha512_256i(&[
-            BigUint::from(12345678_u32),
-            BigUint::from(0_u32),
-            BigUint::from(34567890_u32),
+            &BigUint::from(12345678_u32),
+            &BigUint::from(0_u32),
+            &BigUint::from(34567890_u32),
         ]);
         assert_eq!(
             [
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn hash_bigint_tagged() {
-        let one = hash_sha512_256i_tagged("tag-a".as_bytes(), &[BigUint::from(12345678_u32)]);
+        let one = hash_sha512_256i_tagged("tag-a".as_bytes(), &[&BigUint::from(12345678_u32)]);
         assert_eq!(
             [
                 62, 229, 129, 172, 169, 125, 219, 131, 105, 95, 195, 233, 170, 196, 197, 213, 236,
@@ -126,7 +126,7 @@ mod tests {
         );
         let two = hash_sha512_256i_tagged(
             "tag-b".as_bytes(),
-            &[BigUint::from(12345678_u32), BigUint::from(34567890_u32)],
+            &[&BigUint::from(12345678_u32), &BigUint::from(34567890_u32)],
         );
         assert_eq!(
             [
@@ -138,9 +138,9 @@ mod tests {
         let three = hash_sha512_256i_tagged(
             "tag-c".as_bytes(),
             &[
-                BigUint::from(12345678_u32),
-                BigUint::from(0_u32),
-                BigUint::from(34567890_u32),
+                &BigUint::from(12345678_u32),
+                &BigUint::from(0_u32),
+                &BigUint::from(34567890_u32),
             ],
         );
         assert_eq!(
