@@ -1,4 +1,5 @@
 use crate::hash::hash_sha512_256i_tagged;
+use crate::utils::bytes::{from_biguint, to_biguint};
 use crate::utils::{ecdsa, NTildei};
 use crate::Result;
 use crate::{paillier, CryptoError};
@@ -284,16 +285,16 @@ impl ProofBob {
 impl From<ProofBob> for [Bytes; ProofBob::NUM_PARTS] {
     fn from(pb: ProofBob) -> Self {
         [
-            pb.z.to_bytes_be().into(),
-            pb.z_prm.to_bytes_be().into(),
-            pb.t.to_bytes_be().into(),
-            pb.v.to_bytes_be().into(),
-            pb.w.to_bytes_be().into(),
-            pb.s.to_bytes_be().into(),
-            pb.s1.to_bytes_be().into(),
-            pb.s2.to_bytes_be().into(),
-            pb.t1.to_bytes_be().into(),
-            pb.t2.to_bytes_be().into(),
+            from_biguint(&pb.z),
+            from_biguint(&pb.z_prm),
+            from_biguint(&pb.t),
+            from_biguint(&pb.v),
+            from_biguint(&pb.w),
+            from_biguint(&pb.s),
+            from_biguint(&pb.s1),
+            from_biguint(&pb.s2),
+            from_biguint(&pb.t1),
+            from_biguint(&pb.t2),
         ]
     }
 }
@@ -482,7 +483,7 @@ where
         let bob: [Bytes; ProofBob::NUM_PARTS] = pb.bob.into();
         let point = {
             let (x, y) = ecdsa::point_xy(&pb.u);
-            [x.to_bytes_be().into(), y.to_bytes_be().into()]
+            [from_biguint(&x), from_biguint(&y)]
         };
         let mut base = array_vec!([Bytes; ProofBob::NUM_PARTS_WITH_POINT]);
         base.extend_from_slice(&bob);
@@ -511,14 +512,6 @@ where
             ecdsa::xy_point::<C>(&x, &y).ok_or(CryptoError::message_malformed())?
         };
         Ok(Self { bob, u })
-    }
-}
-
-fn to_biguint(bs: &Bytes) -> Result<BigUint> {
-    if bs.is_empty() {
-        Err(CryptoError::message_malformed())
-    } else {
-        Ok(BigUint::from_bytes_be(bs))
     }
 }
 

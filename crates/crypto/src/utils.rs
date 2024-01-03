@@ -1,3 +1,4 @@
+pub mod bytes;
 pub mod ecdsa;
 
 use crate::CryptoError;
