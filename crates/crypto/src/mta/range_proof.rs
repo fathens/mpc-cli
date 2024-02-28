@@ -8,7 +8,7 @@ use bytes::Bytes;
 use common::mod_int::ModInt;
 use common::random::{get_random_positive_int, get_random_positive_relatively_prime_int};
 use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
-use elliptic_curve::{CurveArithmetic, FieldBytesSize};
+use elliptic_curve::CurveArithmetic;
 use num_bigint::{BigUint, ToBigInt};
 use num_integer::Integer;
 use std::ops::Neg;
@@ -33,8 +33,6 @@ impl RangeProofAlice {
     ) -> Result<Self>
     where
         C: CurveArithmetic,
-        C::AffinePoint: ToEncodedPoint<C>,
-        FieldBytesSize<C>: ModulusSize,
     {
         let h1 = &ntildei.v1;
         let h2 = &ntildei.v2;
@@ -88,8 +86,6 @@ impl RangeProofAlice {
     pub fn verify<C>(&self, pk: &PublicKey, ntildei: &NTildei, c: &BigUint) -> bool
     where
         C: CurveArithmetic,
-        C::AffinePoint: ToEncodedPoint<C>,
-        FieldBytesSize<C>: ModulusSize,
     {
         let q = &ecdsa::curve_n::<C>();
         let q3 = &q.pow(3);
