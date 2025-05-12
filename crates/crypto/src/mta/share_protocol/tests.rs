@@ -1,8 +1,8 @@
 use super::*;
-use crate::CryptoError;
 use crate::paillier::PrivateKey;
 use crate::utils::ecdsa::generate_mul;
 use crate::utils::NTildei;
+use crate::CryptoError;
 use bytes::Bytes;
 use common::random::get_random_int;
 use elliptic_curve::group::prime::PrimeCurveAffine;
@@ -30,7 +30,7 @@ fn get_random_int_with_seed(bits: u64, seed: &[u8]) -> std::result::Result<BigUi
     ]);
 
     // ビット長の整数を生成
-    let mut bytes = vec![0u8; (bits as usize + 7) / 8];
+    let mut bytes = vec![0u8; (bits as usize).div_ceil(8)];
     rng.fill(&mut bytes[..]);
 
     // 最上位バイトを調整して指定ビット数に収める
@@ -53,7 +53,7 @@ fn get_test_small_int() -> BigUint {
 // 固定シードを使用して小さな整数を生成（テスト用）
 fn get_fixed_small_int(idx: u64) -> BigUint {
     // 32バイトのシードを作成
-    let mut seed = TEST_SEED.clone();
+    let mut seed = TEST_SEED;
     // 最後のバイトをインデックスとして使用
     seed[31] = idx as u8;
     get_random_int_with_seed(8, &seed).unwrap()
@@ -62,7 +62,7 @@ fn get_fixed_small_int(idx: u64) -> BigUint {
 // 固定シードを使用して実用的なサイズの整数を生成（テスト用）
 fn get_fixed_practical_int(idx: u64) -> BigUint {
     // 32バイトのシードを作成
-    let mut seed = TEST_SEED.clone();
+    let mut seed = TEST_SEED;
     // 最後のバイトをインデックスとして使用
     seed[31] = idx as u8;
     get_random_int_with_seed(64, &seed).unwrap()
@@ -75,7 +75,7 @@ where
 {
     let bits = C::Scalar::NUM_BITS as u64 - 10; // 曲線の位数より少し小さい値を生成
                                                 // 32バイトのシードを作成
-    let mut seed = TEST_SEED.clone();
+    let mut seed = TEST_SEED;
     // 最後のバイトをインデックスとして使用
     seed[31] = idx as u8;
     get_random_int_with_seed(bits, &seed).unwrap()
@@ -84,17 +84,15 @@ where
 // テスト用のNTildeセット
 struct TestNTildeSet {
     alice: NTildei,
-    bob: NTildei,
 }
 
 impl TestNTildeSet {
     // 新しいテスト用NTildeセットを作成
     fn new() -> Self {
         // テスト用のNTildeiを取得
-        let samples = crate::utils::NTildei::generate_for_test();
+        let samples = NTildei::generate_for_test();
         TestNTildeSet {
             alice: samples[0].clone(), // サンプルの1つ目を使用
-            bob: samples[1].clone(),   // サンプルの2つ目を使用
         }
     }
 }
@@ -189,11 +187,14 @@ fn test_share_protocol_simple() {
     let b = BigUint::from(24u32);
 
     println!("a = {}, b = {}", a, b);
-    
+
     // ポイントの生成（G*b）
     let g_b_point = generate_mul::<Secp256k1>(&b);
-    println!("g_b_point.is_identity() = {}", bool::from(g_b_point.is_identity()));
-    
+    println!(
+        "g_b_point.is_identity() = {}",
+        bool::from(g_b_point.is_identity())
+    );
+
     // 生成されるポイントのx, y座標を出力
     let (x, y) = ecdsa::point_xy(&g_b_point);
     println!("g_b_point: x = {}, y = {}", x, y);
@@ -243,7 +244,6 @@ fn test_share_protocol() {
     // テスト用のNTildeを使用
     let ntildes = TestNTildeSet::new();
     let ntilde_alice = ntildes.alice;
-    let ntilde_bob = ntildes.bob;
 
     // 再現性のあるテスト用の値を使用
     let a = get_fixed_small_int(3);
@@ -251,7 +251,7 @@ fn test_share_protocol() {
 
     println!("Aliceの初期化処理を開始...");
     let start = Instant::now();
-    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
     println!(
         "Aliceの初期化に{}秒かかりました",
         start.elapsed().as_secs_f64()
@@ -298,7 +298,6 @@ fn test_share_protocol_wc() {
     // テスト用のNTildeを使用
     let ntildes = TestNTildeSet::new();
     let ntilde_alice = ntildes.alice;
-    let ntilde_bob = ntildes.bob;
 
     // 再現性のあるテスト用の値を使用
     let a = get_fixed_small_int(5);
@@ -309,7 +308,7 @@ fn test_share_protocol_wc() {
 
     println!("Aliceの初期化処理を開始...");
     let start = Instant::now();
-    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
     println!(
         "Aliceの初期化に{}秒かかりました",
         start.elapsed().as_secs_f64()
@@ -318,15 +317,6 @@ fn test_share_protocol_wc() {
     // ------ Bobの処理フェーズ ------
     println!("Bobの処理を開始...");
     let start = Instant::now();
-
-    // ParamOfProofBobの作成
-    let param_alice = ParamOfProofBob {
-        session: Bytes::from("test_session_id_wc"),
-        pk: pk_alice.clone(),
-        n_tilde: ntilde_alice.clone(),
-        c1: ca.clone(),
-        c2: BigUint::from(0u32), // 仮の値（bob_midで更新される）
-    };
 
     // Bob処理の実行（witness check付き）- 検証をスキップ
     let bob_result = test_bob_mid_wc::<Secp256k1>(&pk_alice, &b, &ca, &g_b_point).unwrap();
@@ -369,11 +359,14 @@ fn test_share_protocol_wc_simple() {
     let b = BigUint::from(24u32);
 
     println!("a = {}, b = {}", a, b);
-    
+
     // ポイントの生成（G*b）
     let g_b_point = generate_mul::<Secp256k1>(&b);
-    println!("g_b_point.is_identity() = {}", bool::from(g_b_point.is_identity()));
-    
+    println!(
+        "g_b_point.is_identity() = {}",
+        bool::from(g_b_point.is_identity())
+    );
+
     // 生成されるポイントのx, y座標を出力
     let (x, y) = ecdsa::point_xy(&g_b_point);
     println!("g_b_point: x = {}, y = {}", x, y);
@@ -424,14 +417,13 @@ fn test_share_protocol_zero_value() {
     // テスト用のNTildeを使用
     let ntildes = TestNTildeSet::new();
     let ntilde_alice = ntildes.alice;
-    let ntilde_bob = ntildes.bob;
 
     // bにゼロを使用、aには固定値を使用
     let a = get_fixed_small_int(9);
     let b = BigUint::from(0u32);
 
     // Aliceの初期化
-    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
 
     // 検証をスキップしたテスト用のBob処理
     let bob_result = test_bob_mid(&pk_alice, &b, &ca).unwrap();
@@ -456,7 +448,6 @@ fn test_share_protocol_invalid_proof() {
     // テスト用のNTildeを使用
     let ntildes = TestNTildeSet::new();
     let ntilde_alice = ntildes.alice;
-    let ntilde_bob = ntildes.bob;
 
     // 固定値を使用
     let a = get_fixed_small_int(10);
@@ -466,7 +457,7 @@ fn test_share_protocol_invalid_proof() {
     let session_id = Bytes::from("test_session_id_for_invalid_proof");
 
     // Aliceの初期化
-    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
 
     // bob_midの代わりにテスト用の簡易版関数を使用
     let bob_result = test_bob_mid(&pk_alice, &b, &ca).unwrap();
@@ -519,7 +510,6 @@ fn test_share_protocol_practical_size() {
     // テスト用のNTildeを使用
     let ntildes = TestNTildeSet::new();
     let ntilde_alice = ntildes.alice;
-    let ntilde_bob = ntildes.bob;
 
     // 実用的なサイズの固定値を使用
     let a = get_fixed_practical_int(1);
@@ -527,7 +517,7 @@ fn test_share_protocol_practical_size() {
 
     println!("Aliceの初期化処理を開始...");
     let start = Instant::now();
-    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
     println!(
         "Aliceの初期化に{}秒かかりました",
         start.elapsed().as_secs_f64()
@@ -568,14 +558,13 @@ fn test_share_protocol_curve_size() {
     // 曲線のパラメータを設定
     let q = ecdsa::curve_n::<Secp256k1>();
 
-    // テスト用のNTildeを使用
-    let ntildes = TestNTildeSet::new();
-    let ntilde_alice = ntildes.alice;
-    let ntilde_bob = ntildes.bob;
-
     // Paillier鍵を生成
     let sk_alice = PrivateKey::samples(None).clone();
     let pk_alice = sk_alice.public_key().clone();
+
+    // テスト用のNTildeを使用
+    let ntildes = TestNTildeSet::new();
+    let ntilde_alice = ntildes.alice;
 
     // 曲線サイズに近い値を生成
     let a = get_fixed_curve_int::<Secp256k1>(3);
@@ -586,18 +575,9 @@ fn test_share_protocol_curve_size() {
 
     // Aliceの初期化
     let start = Instant::now();
-    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
     let alice_init_time = start.elapsed();
     println!("Aliceの初期化に{:?}かかりました", alice_init_time);
-
-    // ParamOfProofBobの作成
-    let param_alice = ParamOfProofBob {
-        session: Bytes::from("test_session_id_curve_size"),
-        pk: pk_alice.clone(),
-        n_tilde: ntilde_alice.clone(),
-        c1: ca.clone(),
-        c2: BigUint::from(0u32),
-    };
 
     // Bob処理の実行
     let bob_start = Instant::now();
