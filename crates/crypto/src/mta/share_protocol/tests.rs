@@ -231,117 +231,6 @@ fn test_share_protocol_simple() {
 }
 
 #[test]
-fn test_share_protocol() {
-    // 曲線のパラメータを設定
-    let q = ecdsa::curve_n::<Secp256k1>();
-
-    println!("あらかじめ生成されたPaillier鍵を使用します...");
-
-    // ハードコーディングされたPaillier鍵を使用
-    let sk_alice = PrivateKey::samples(None).clone();
-    let pk_alice = sk_alice.public_key().clone();
-
-    // テスト用のNTildeを使用
-    let ntildes = TestNTildeSet::new();
-    let ntilde_alice = ntildes.alice;
-
-    // 再現性のあるテスト用の値を使用
-    let a = get_fixed_small_int(3);
-    let b = get_fixed_small_int(4);
-
-    println!("Aliceの初期化処理を開始...");
-    let start = Instant::now();
-    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
-    println!(
-        "Aliceの初期化に{}秒かかりました",
-        start.elapsed().as_secs_f64()
-    );
-
-    // ------ Bobの処理フェーズ ------
-    println!("Bobの処理を開始...");
-    let start = Instant::now();
-
-    // 検証をスキップしたテスト用のBob処理
-    let bob_result = test_bob_mid(&pk_alice, &b, &ca).unwrap();
-
-    println!("Bob処理に{}秒かかりました", start.elapsed().as_secs_f64());
-
-    // ------ Aliceの終了フェーズ ------
-    println!("Alice終了処理を開始...");
-    let start = Instant::now();
-
-    // Alice終了処理の実行
-    let alpha = test_alice_end::<Secp256k1>(&sk_alice, &bob_result.cb).unwrap();
-
-    println!(
-        "Alice終了処理に{}秒かかりました",
-        start.elapsed().as_secs_f64()
-    );
-
-    // 検証: alpha = a*b + beta_prm mod q
-    let a_times_b = &a * &b;
-    let expected = (a_times_b + &bob_result.beta_prm) % &q;
-    assert_eq!(alpha, expected);
-}
-
-#[test]
-fn test_share_protocol_wc() {
-    // 曲線のパラメータを設定
-    let q = ecdsa::curve_n::<Secp256k1>();
-
-    println!("あらかじめ生成されたPaillier鍵を使用します...");
-
-    // ハードコーディングされたPaillier鍵を使用
-    let sk_alice = PrivateKey::samples(None).clone();
-    let pk_alice = sk_alice.public_key().clone();
-
-    // テスト用のNTildeを使用
-    let ntildes = TestNTildeSet::new();
-    let ntilde_alice = ntildes.alice;
-
-    // 再現性のあるテスト用の値を使用
-    let a = get_fixed_small_int(5);
-    let b = get_fixed_small_int(6);
-
-    // ポイントの生成（G*b）- bの値から直接生成
-    let g_b_point = generate_mul::<Secp256k1>(&b);
-
-    println!("Aliceの初期化処理を開始...");
-    let start = Instant::now();
-    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
-    println!(
-        "Aliceの初期化に{}秒かかりました",
-        start.elapsed().as_secs_f64()
-    );
-
-    // ------ Bobの処理フェーズ ------
-    println!("Bobの処理を開始...");
-    let start = Instant::now();
-
-    // Bob処理の実行（witness check付き）- 検証をスキップ
-    let bob_result = test_bob_mid_wc::<Secp256k1>(&pk_alice, &b, &ca, &g_b_point).unwrap();
-
-    println!("Bob処理に{}秒かかりました", start.elapsed().as_secs_f64());
-
-    // ------ Aliceの終了フェーズ ------
-    println!("Alice終了処理を開始...");
-    let start = Instant::now();
-
-    // Alice終了処理の実行（検証なし、テスト用）
-    let alpha = test_alice_end_wc::<Secp256k1>(&sk_alice, &bob_result.cb, &g_b_point).unwrap();
-
-    println!(
-        "Alice終了処理に{}秒かかりました",
-        start.elapsed().as_secs_f64()
-    );
-
-    // 検証: alpha = a*b + beta_prm mod q
-    let a_times_b = &a * &b;
-    let expected = (a_times_b + &bob_result.beta_prm) % &q;
-    assert_eq!(alpha, expected);
-}
-
-#[test]
 fn test_share_protocol_wc_simple() {
     // 曲線のパラメータを設定
     let q = ecdsa::curve_n::<Secp256k1>();
@@ -615,7 +504,7 @@ fn test_share_protocol_curve_size() {
 /// このテストでは簡易版テスト関数ではなく、本物の実装を使用してMTAプロトコルをテストします。
 /// セキュリティ証明を含めた完全なプロトコルフローを検証します。
 #[test]
-fn test_share_protocol_with_real_impl() {
+fn test_share_protocol() {
     // 曲線のパラメータを設定
     let q = ecdsa::curve_n::<Secp256k1>();
 
@@ -689,7 +578,7 @@ fn test_share_protocol_with_real_impl() {
 
 // WCバージョン（Witness Encryption）の実際の実装を使用したテスト
 #[test]
-fn test_share_protocol_wc_with_real_impl() {
+fn test_share_protocol_wc() {
     // 曲線のパラメータを設定
     let q = ecdsa::curve_n::<Secp256k1>();
 
@@ -747,7 +636,8 @@ fn test_share_protocol_wc_with_real_impl() {
     };
 
     // alice_end_wc: Aliceが最終結果を取得（witness-committed版）
-    let alpha_prm = alice_end_wc::<Secp256k1>(&updated_param, &bob_result.pb, &g_b_point, &sk).unwrap();
+    let alpha_prm =
+        alice_end_wc::<Secp256k1>(&updated_param, &bob_result.pb, &g_b_point, &sk).unwrap();
     println!("Aliceの最終結果（WC版）を取得しました");
 
     // 検証：a * b = alpha_prm + beta (mod q)
