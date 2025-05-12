@@ -49,11 +49,11 @@ impl VerifyParam {
             &self.n_tildei.n,
             &self.n_tildei.v1,
             &self.n_tildei.v2,
-            &p,
-            &q,
-            &a,
-            &b,
-            &t,
+            p,
+            q,
+            a,
+            b,
+            t,
             &sigma,
         ];
         let eh = hash_sha512_256i_tagged(&self.session, &list);

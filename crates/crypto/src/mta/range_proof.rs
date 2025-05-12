@@ -7,7 +7,6 @@ use crate::Result;
 use bytes::Bytes;
 use common::mod_int::ModInt;
 use common::random::{get_random_positive_int, get_random_positive_relatively_prime_int};
-use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
 use elliptic_curve::CurveArithmetic;
 use num_bigint::{BigUint, ToBigInt};
 use num_integer::Integer;
