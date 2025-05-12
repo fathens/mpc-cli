@@ -464,7 +464,7 @@ fn test_share_protocol_invalid_proof() {
 
     // 更新されたParamOfProofBobの作成
     let param_bob = ParamOfProofBob {
-        session: session_id,
+        session: session_id.clone(),
         pk: pk_alice.clone(),
         n_tilde: ntilde_alice,
         c1: ca,
@@ -608,4 +608,155 @@ fn test_share_protocol_curve_size() {
     let a_times_b = &a * &b;
     let expected = (a_times_b + &bob_result.beta_prm) % &q;
     assert_eq!(alpha, expected);
+}
+
+/// 実際の実装を使用したプロトコルテスト
+///
+/// このテストでは簡易版テスト関数ではなく、本物の実装を使用してMTAプロトコルをテストします。
+/// セキュリティ証明を含めた完全なプロトコルフローを検証します。
+#[test]
+fn test_share_protocol_with_real_impl() {
+    // 曲線のパラメータを設定
+    let q = ecdsa::curve_n::<Secp256k1>();
+
+    println!("Paillier鍵の生成を開始...");
+    let start = Instant::now();
+    // キーペアの生成
+    let sk = PrivateKey::samples(None).clone();
+    let pk = sk.public_key().clone();
+    println!("鍵生成に{}秒かかりました", start.elapsed().as_secs_f64());
+
+    // セッションIDを生成（通常は一意のものを使用）
+    let session_id = Bytes::from("test_session_123");
+
+    // NTildeセットを生成
+    let ntilde_set = TestNTildeSet::new();
+    let ntilde_alice = ntilde_set.alice.clone();
+
+    // 再現性のある固定値を使用
+    let a = BigUint::from(42u32);
+    let b = BigUint::from(24u32);
+
+    println!("a = {}, b = {}", a, b);
+
+    // ポイントの生成（G*b）
+    let g_b_point = generate_mul::<Secp256k1>(&b);
+    println!(
+        "g_b_point.is_identity() = {}",
+        bool::from(g_b_point.is_identity())
+    );
+
+    // alice_init: Aliceが値aを暗号化し、範囲証明を生成
+    let (ca, pf) = alice_init::<Secp256k1>(&pk, &a, &ntilde_alice).unwrap();
+    println!("Aliceの初期値と証明を生成しました");
+
+    // ParamOfProofBobを作成（c2は仮の値として設定）
+    let param = ParamOfProofBob {
+        session: session_id.clone(),
+        pk: pk.clone(),
+        n_tilde: ntilde_alice.clone(),
+        c1: ca.clone(),
+        c2: BigUint::from(0u32), // 一時的な値（bob_midで上書きされる）
+    };
+
+    // bob_mid: Bobが自分の値bを使用して処理
+    let bob_result = bob_mid::<Secp256k1>(&param, &pf, &b, &ntilde_alice).unwrap();
+    println!("Bobの中間結果を生成しました");
+
+    // 更新されたパラメータを作成
+    let updated_param = ParamOfProofBob {
+        session: session_id,
+        pk: pk.clone(),
+        n_tilde: ntilde_alice.clone(),
+        c1: ca,
+        c2: bob_result.cb.clone(), // 更新されたcb値
+    };
+
+    // alice_end: Aliceが最終結果を取得
+    let alpha_prm = alice_end::<Secp256k1>(&updated_param, &bob_result.pb, &sk).unwrap();
+    println!("Aliceの最終結果を取得しました");
+
+    // 検証：a * b = alpha_prm + beta (mod q)
+    let expected = (a * b) % &q;
+    let actual = (alpha_prm.clone() + bob_result.beta.clone()) % &q;
+
+    println!("期待値: {} = a * b mod q", expected);
+    println!("実際値: {} = alpha_prm + beta mod q", actual);
+
+    assert_eq!(expected, actual, "a * b ≠ alpha_prm + beta (mod q)");
+    println!("MTAプロトコルの検証に成功しました");
+}
+
+// WCバージョン（Witness Encryption）の実際の実装を使用したテスト
+#[test]
+fn test_share_protocol_wc_with_real_impl() {
+    // 曲線のパラメータを設定
+    let q = ecdsa::curve_n::<Secp256k1>();
+
+    println!("Paillier鍵の生成を開始...");
+    let start = Instant::now();
+    // キーペアの生成
+    let sk = PrivateKey::samples(None).clone();
+    let pk = sk.public_key().clone();
+    println!("鍵生成に{}秒かかりました", start.elapsed().as_secs_f64());
+
+    // セッションIDを生成（通常は一意のものを使用）
+    let session_id = Bytes::from("test_session_wc_123");
+
+    // NTildeセットを生成
+    let ntilde_set = TestNTildeSet::new();
+    let ntilde_alice = ntilde_set.alice.clone();
+
+    // 再現性のある固定値を使用
+    let a = BigUint::from(42u32);
+    let b = BigUint::from(24u32);
+
+    println!("a = {}, b = {}", a, b);
+
+    // ポイントの生成（G*b）
+    let g_b_point = generate_mul::<Secp256k1>(&b);
+    println!(
+        "g_b_point.is_identity() = {}",
+        bool::from(g_b_point.is_identity())
+    );
+
+    // alice_init: Aliceが値aを暗号化し、範囲証明を生成
+    let (ca, pf) = alice_init::<Secp256k1>(&pk, &a, &ntilde_alice).unwrap();
+    println!("Aliceの初期値と証明を生成しました");
+
+    // ParamOfProofBobを作成（c2は仮の値として設定）
+    let param = ParamOfProofBob {
+        session: session_id.clone(),
+        pk: pk.clone(),
+        n_tilde: ntilde_alice.clone(),
+        c1: ca.clone(),
+        c2: BigUint::from(0u32), // 一時的な値（bob_mid_wcで上書きされる）
+    };
+
+    // bob_mid_wc: Bobが自分の値bを使用して処理（witness-committed版）
+    let bob_result = bob_mid_wc::<Secp256k1>(&param, &pf, &b, &ntilde_alice, &g_b_point).unwrap();
+    println!("Bobの中間結果（WC版）を生成しました");
+
+    // 更新されたパラメータを作成
+    let updated_param = ParamOfProofBob {
+        session: session_id,
+        pk: pk.clone(),
+        n_tilde: ntilde_alice.clone(),
+        c1: ca,
+        c2: bob_result.cb.clone(), // 更新されたcb値
+    };
+
+    // alice_end_wc: Aliceが最終結果を取得（witness-committed版）
+    let alpha_prm = alice_end_wc::<Secp256k1>(&updated_param, &bob_result.pb, &g_b_point, &sk).unwrap();
+    println!("Aliceの最終結果（WC版）を取得しました");
+
+    // 検証：a * b = alpha_prm + beta (mod q)
+    let expected = (a * b) % &q;
+    let actual = (alpha_prm.clone() + bob_result.beta.clone()) % &q;
+
+    println!("期待値: {} = a * b mod q", expected);
+    println!("実際値: {} = alpha_prm + beta mod q", actual);
+
+    assert_eq!(expected, actual, "a * b ≠ alpha_prm + beta (mod q)");
+    println!("WC版MTAプロトコルの検証に成功しました");
 }
