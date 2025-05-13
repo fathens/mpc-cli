@@ -2,9 +2,7 @@ use super::*;
 use crate::paillier::PrivateKey;
 use crate::utils::ecdsa::generate_mul;
 use crate::utils::NTildei;
-use crate::CryptoError;
 use bytes::Bytes;
-use common::random::get_random_int;
 use elliptic_curve::group::prime::PrimeCurveAffine;
 use elliptic_curve::PrimeField;
 use k256::Secp256k1;
@@ -43,11 +41,6 @@ fn get_random_int_with_seed(bits: u64, seed: &[u8]) -> std::result::Result<BigUi
     }
 
     Ok(BigUint::from_bytes_be(&bytes))
-}
-
-// テスト用の小さな値を生成する
-fn get_test_small_int() -> BigUint {
-    get_random_int(8).unwrap()
 }
 
 // 固定シードを使用して小さな整数を生成（テスト用）
@@ -97,75 +90,6 @@ impl TestNTildeSet {
     }
 }
 
-// テスト専用の受け渡し型（シンプル版bob_mid用）
-struct SimpleBobMidResult {
-    pub cb: Ciphertext,
-    pub beta_prm: BigUint,
-}
-
-// テスト用の簡易版bob_mid関数（暗号証明なし）
-fn test_bob_mid(
-    pk: &PublicKey,
-    b: &BigUint,
-    ca: &BigUint,
-) -> std::result::Result<SimpleBobMidResult, CryptoError> {
-    // テスト用に小さな乱数を使用
-    let beta_prm = get_test_small_int();
-
-    // 暗号化（最も時間がかかる部分）
-    let cr = pk.encrypt(&beta_prm)?;
-    // ホモモルフィック演算
-    let cb = pk.homo_add(&pk.homo_mult(b, ca), &cr.cypher);
-
-    Ok(SimpleBobMidResult { cb, beta_prm })
-}
-
-// テスト用の簡易版alice_end関数（検証なし）
-fn test_alice_end<C>(sk: &PrivateKey, cb: &Ciphertext) -> std::result::Result<BigUint, CryptoError>
-where
-    C: CurveArithmetic,
-{
-    let alpha_prm = sk.decrypt(cb)?;
-    let q = ecdsa::curve_n::<C>();
-    Ok(alpha_prm % q)
-}
-
-// テスト用の簡易版bob_mid_wc関数（暗号証明なし）
-fn test_bob_mid_wc<C>(
-    pk: &PublicKey,
-    b: &BigUint,
-    ca: &BigUint,
-    _g_b_point: &<C as CurveArithmetic>::AffinePoint,
-) -> std::result::Result<SimpleBobMidResult, CryptoError>
-where
-    C: CurveArithmetic,
-    FieldBytesSize<C>: ModulusSize,
-{
-    // テスト用に小さな乱数を使用
-    let beta_prm = get_test_small_int();
-
-    // 暗号化（最も時間がかかる部分）
-    let cr = pk.encrypt(&beta_prm)?;
-    // ホモモルフィック演算
-    let cb = pk.homo_add(&pk.homo_mult(b, ca), &cr.cypher);
-
-    Ok(SimpleBobMidResult { cb, beta_prm })
-}
-
-// テスト用の簡易版alice_end_wc関数（検証なし）
-fn test_alice_end_wc<C>(
-    sk: &PrivateKey,
-    cb: &Ciphertext,
-    _g_b_point: &<C as CurveArithmetic>::AffinePoint,
-) -> std::result::Result<BigUint, CryptoError>
-where
-    C: CurveArithmetic,
-{
-    let alpha_prm = sk.decrypt(cb)?;
-    let q = ecdsa::curve_n::<C>();
-    Ok(alpha_prm % q)
-}
-
 /// シンプルなプロトコルテスト（証明なし）
 ///
 /// このテストでは暗号学的証明を省いた基本的なMTAプロトコルの動作を検証します。
@@ -201,21 +125,42 @@ fn test_share_protocol_simple() {
 
     println!("暗号化を開始...");
     let start = Instant::now();
-    // Aliceの初期化（暗号化のみ、証明なし）
-    let encrypt_result = pk.encrypt(&a).expect("Encryption failed");
-    let ca = encrypt_result.cypher;
+    // Aliceの初期化（暗号化と証明の生成）
+    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk, &a, &TestNTildeSet::new().alice).unwrap();
     println!("暗号化に{}秒かかりました", start.elapsed().as_secs_f64());
+
+    // テスト用のセッションID
+    let session_id = Bytes::from("test_session_id");
+
+    // ParamOfProofBobの作成
+    let param_bob = ParamOfProofBob {
+        session: session_id,
+        pk: pk.clone(),
+        n_tilde: TestNTildeSet::new().alice,
+        c1: ca.clone(),
+        c2: BigUint::from(0u32), // 初期値（bob_midで更新される）
+    };
 
     println!("Bob処理を開始...");
     let start = Instant::now();
-    // Bobの中間処理（シンプルバージョン）
-    let bob_result = test_bob_mid(&pk, &b, &ca).unwrap();
+    // Bobの処理（実装版）
+    let bob_result =
+        bob_mid::<Secp256k1>(&param_bob, &proof_alice, &b, &TestNTildeSet::new().alice).unwrap();
     println!("Bob処理に{}秒かかりました", start.elapsed().as_secs_f64());
 
     println!("Alice終了処理を開始...");
     let start = Instant::now();
-    // Aliceの終了処理（シンプル版）
-    let alpha = test_alice_end::<Secp256k1>(&sk, &bob_result.cb).unwrap();
+    // 更新されたパラメータの作成
+    let updated_param = ParamOfProofBob {
+        session: param_bob.session,
+        pk: param_bob.pk,
+        n_tilde: param_bob.n_tilde,
+        c1: param_bob.c1,
+        c2: bob_result.cb.clone(),
+    };
+
+    // Aliceの終了処理（実装版）
+    let alpha = alice_end::<Secp256k1>(&updated_param, &bob_result.pb, &sk).unwrap();
     println!(
         "Alice終了処理に{}秒かかりました",
         start.elapsed().as_secs_f64()
@@ -242,6 +187,10 @@ fn test_share_protocol_wc_simple() {
     let pk = sk.public_key().clone();
     println!("鍵生成に{}秒かかりました", start.elapsed().as_secs_f64());
 
+    // テスト用のNTildeを使用
+    let ntildes = TestNTildeSet::new();
+    let ntilde_alice = ntildes.alice;
+
     // 再現性のある固定値を使用
     // 0ではない値を確保するために異なるインデックスを使用
     let a = BigUint::from(42u32);
@@ -260,23 +209,44 @@ fn test_share_protocol_wc_simple() {
     let (x, y) = ecdsa::point_xy(&g_b_point);
     println!("g_b_point: x = {}, y = {}", x, y);
 
+    // テスト用のセッションID
+    let session_id = Bytes::from("test_session_id_for_wc_simple");
+
     println!("暗号化を開始...");
     let start = Instant::now();
-    // Aliceの初期化（暗号化のみ、証明なし）
-    let encrypt_result = pk.encrypt(&a).expect("Encryption failed");
-    let ca = encrypt_result.cypher;
+    // Aliceの初期化（暗号化と証明の生成）
+    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk, &a, &ntilde_alice).unwrap();
     println!("暗号化に{}秒かかりました", start.elapsed().as_secs_f64());
+
+    // ParamOfProofBobの作成
+    let param_bob = ParamOfProofBob {
+        session: session_id,
+        pk: pk.clone(),
+        n_tilde: ntilde_alice.clone(),
+        c1: ca.clone(),
+        c2: BigUint::from(0u32), // 初期値（bob_mid_wcで更新される）
+    };
 
     println!("Bob処理を開始（WC）...");
     let start = Instant::now();
-    // Bobの中間処理（シンプルバージョン、witness check付き）
-    let bob_result = test_bob_mid_wc::<Secp256k1>(&pk, &b, &ca, &g_b_point).unwrap();
+    // Bobの中間処理（実装版、witness check付き）
+    let bob_result =
+        bob_mid_wc::<Secp256k1>(&param_bob, &proof_alice, &b, &ntilde_alice, &g_b_point).unwrap();
     println!("Bob処理に{}秒かかりました", start.elapsed().as_secs_f64());
+
+    // 更新されたパラメータの作成
+    let updated_param = ParamOfProofBob {
+        session: param_bob.session,
+        pk: param_bob.pk,
+        n_tilde: param_bob.n_tilde,
+        c1: param_bob.c1,
+        c2: bob_result.cb.clone(),
+    };
 
     println!("Alice終了処理を開始（WC）...");
     let start = Instant::now();
-    // Aliceの終了処理（シンプル版、witness check付き）
-    let alpha = test_alice_end_wc::<Secp256k1>(&sk, &bob_result.cb, &g_b_point).unwrap();
+    // Aliceの終了処理（実装版、witness check付き）
+    let alpha = alice_end_wc::<Secp256k1>(&updated_param, &bob_result.pb, &g_b_point, &sk).unwrap();
     println!(
         "Alice終了処理に{}秒かかりました",
         start.elapsed().as_secs_f64()
@@ -311,14 +281,35 @@ fn test_share_protocol_zero_value() {
     let a = get_fixed_small_int(9);
     let b = BigUint::from(0u32);
 
+    // テスト用のセッションID
+    let session_id = Bytes::from("test_session_id_for_zero_value");
+
     // Aliceの初期化
-    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
 
-    // 検証をスキップしたテスト用のBob処理
-    let bob_result = test_bob_mid(&pk_alice, &b, &ca).unwrap();
+    // ParamOfProofBobの作成
+    let param_bob = ParamOfProofBob {
+        session: session_id,
+        pk: pk_alice.clone(),
+        n_tilde: ntilde_alice.clone(),
+        c1: ca.clone(),
+        c2: BigUint::from(0u32), // 初期値（bob_midで更新される）
+    };
 
-    // Alice終了処理（検証なし）
-    let alpha = test_alice_end::<Secp256k1>(&sk_alice, &bob_result.cb).unwrap();
+    // 実際のBob処理
+    let bob_result = bob_mid::<Secp256k1>(&param_bob, &proof_alice, &b, &ntilde_alice).unwrap();
+
+    // 更新されたパラメータの作成
+    let updated_param = ParamOfProofBob {
+        session: param_bob.session,
+        pk: param_bob.pk,
+        n_tilde: param_bob.n_tilde,
+        c1: param_bob.c1,
+        c2: bob_result.cb.clone(),
+    };
+
+    // Alice終了処理（実装版）
+    let alpha = alice_end::<Secp256k1>(&updated_param, &bob_result.pb, &sk_alice).unwrap();
 
     // 検証: bがゼロなので、alpha = beta_prm mod q となるはず
     let expected = &bob_result.beta_prm % &q;
@@ -346,17 +337,26 @@ fn test_share_protocol_invalid_proof() {
     let session_id = Bytes::from("test_session_id_for_invalid_proof");
 
     // Aliceの初期化
-    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
 
-    // bob_midの代わりにテスト用の簡易版関数を使用
-    let bob_result = test_bob_mid(&pk_alice, &b, &ca).unwrap();
-
-    // 更新されたParamOfProofBobの作成
+    // ParamOfProofBobの作成
     let param_bob = ParamOfProofBob {
         session: session_id.clone(),
         pk: pk_alice.clone(),
-        n_tilde: ntilde_alice,
-        c1: ca,
+        n_tilde: ntilde_alice.clone(),
+        c1: ca.clone(),
+        c2: BigUint::from(0u32), // 初期値（bob_midで更新される）
+    };
+
+    // Bob処理
+    let bob_result = bob_mid::<Secp256k1>(&param_bob, &proof_alice, &b, &ntilde_alice).unwrap();
+
+    // 更新されたパラメータの作成
+    let updated_param = ParamOfProofBob {
+        session: param_bob.session,
+        pk: param_bob.pk,
+        n_tilde: param_bob.n_tilde,
+        c1: param_bob.c1,
         c2: bob_result.cb.clone(),
     };
 
@@ -376,7 +376,7 @@ fn test_share_protocol_invalid_proof() {
     let invalid_proof = ProofBob::try_from(invalid_proof_parts).unwrap();
 
     // Alice終了処理（不正証明）- エラーになるはず
-    let result = alice_end::<Secp256k1>(&param_bob, &invalid_proof, &sk_alice);
+    let result = alice_end::<Secp256k1>(&updated_param, &invalid_proof, &sk_alice);
 
     // 不正な証明のため検証に失敗することを確認
     assert!(result.is_err());
@@ -404,29 +404,50 @@ fn test_share_protocol_practical_size() {
     let a = get_fixed_practical_int(1);
     let b = get_fixed_practical_int(2);
 
+    println!("a = {}, b = {}", a, b);
+
+    // テスト用のセッションID
+    let session_id = Bytes::from("test_session_id_for_practical_size");
+
     println!("Aliceの初期化処理を開始...");
     let start = Instant::now();
-    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
     println!(
         "Aliceの初期化に{}秒かかりました",
         start.elapsed().as_secs_f64()
     );
 
-    // ------ Bobの処理フェーズ ------
-    println!("Bobの処理を開始...");
+    // ParamOfProofBobの作成
+    let param_bob = ParamOfProofBob {
+        session: session_id,
+        pk: pk_alice.clone(),
+        n_tilde: ntilde_alice.clone(),
+        c1: ca.clone(),
+        c2: BigUint::from(0u32), // 初期値（bob_midで更新される）
+    };
+
+    println!("Bob処理を開始...");
     let start = Instant::now();
 
-    // 検証をスキップしたテスト用のBob処理
-    let bob_result = test_bob_mid(&pk_alice, &b, &ca).unwrap();
+    // 実装版Bob処理
+    let bob_result = bob_mid::<Secp256k1>(&param_bob, &proof_alice, &b, &ntilde_alice).unwrap();
 
     println!("Bob処理に{}秒かかりました", start.elapsed().as_secs_f64());
 
-    // ------ Aliceの終了フェーズ ------
+    // 更新されたパラメータの作成
+    let updated_param = ParamOfProofBob {
+        session: param_bob.session,
+        pk: param_bob.pk,
+        n_tilde: param_bob.n_tilde,
+        c1: param_bob.c1,
+        c2: bob_result.cb.clone(),
+    };
+
     println!("Alice終了処理を開始...");
     let start = Instant::now();
 
     // Alice終了処理の実行
-    let alpha = test_alice_end::<Secp256k1>(&sk_alice, &bob_result.cb).unwrap();
+    let alpha = alice_end::<Secp256k1>(&updated_param, &bob_result.pb, &sk_alice).unwrap();
 
     println!(
         "Alice終了処理に{}秒かかりました",
@@ -447,7 +468,9 @@ fn test_share_protocol_curve_size() {
     // 曲線のパラメータを設定
     let q = ecdsa::curve_n::<Secp256k1>();
 
-    // Paillier鍵を生成
+    println!("あらかじめ生成されたPaillier鍵を使用します...");
+
+    // ハードコーディングされたPaillier鍵を使用
     let sk_alice = PrivateKey::samples(None).clone();
     let pk_alice = sk_alice.public_key().clone();
 
@@ -464,19 +487,37 @@ fn test_share_protocol_curve_size() {
 
     // Aliceの初期化
     let start = Instant::now();
-    let (ca, _) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
+    let (ca, proof_alice) = alice_init::<Secp256k1>(&pk_alice, &a, &ntilde_alice).unwrap();
     let alice_init_time = start.elapsed();
     println!("Aliceの初期化に{:?}かかりました", alice_init_time);
 
+    // ParamOfProofBobの作成
+    let param_bob = ParamOfProofBob {
+        session: Bytes::from("test_session_id_for_curve_size"),
+        pk: pk_alice.clone(),
+        n_tilde: ntilde_alice.clone(),
+        c1: ca.clone(),
+        c2: BigUint::from(0u32), // 初期値（bob_midで更新される）
+    };
+
     // Bob処理の実行
     let bob_start = Instant::now();
-    let bob_result = test_bob_mid(&pk_alice, &b, &ca).unwrap();
+    let bob_result = bob_mid::<Secp256k1>(&param_bob, &proof_alice, &b, &ntilde_alice).unwrap();
     let bob_time = bob_start.elapsed();
     println!("Bob処理に{:?}かかりました", bob_time);
 
+    // 更新されたパラメータの作成
+    let updated_param = ParamOfProofBob {
+        session: param_bob.session,
+        pk: param_bob.pk,
+        n_tilde: param_bob.n_tilde,
+        c1: param_bob.c1,
+        c2: bob_result.cb.clone(),
+    };
+
     // Alice終了処理
     let alice_end_start = Instant::now();
-    let alpha = test_alice_end::<Secp256k1>(&sk_alice, &bob_result.cb).unwrap();
+    let alpha = alice_end::<Secp256k1>(&updated_param, &bob_result.pb, &sk_alice).unwrap();
     let alice_end_time = alice_end_start.elapsed();
     println!("Alice終了処理に{:?}かかりました", alice_end_time);
 
@@ -545,7 +586,7 @@ fn test_share_protocol() {
         pk: pk.clone(),
         n_tilde: ntilde_alice.clone(),
         c1: ca.clone(),
-        c2: BigUint::from(0u32), // 一時的な値（bob_midで上書きされる）
+        c2: BigUint::from(0u32), // 一時的な値（bob_midで更新される）
     };
 
     // bob_mid: Bobが自分の値bを使用して処理
@@ -619,7 +660,7 @@ fn test_share_protocol_wc() {
         pk: pk.clone(),
         n_tilde: ntilde_alice.clone(),
         c1: ca.clone(),
-        c2: BigUint::from(0u32), // 一時的な値（bob_mid_wcで上書きされる）
+        c2: BigUint::from(0u32), // 一時的な値（bob_mid_wcで更新される）
     };
 
     // bob_mid_wc: Bobが自分の値bを使用して処理（witness-committed版）
