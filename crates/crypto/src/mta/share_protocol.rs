@@ -10,7 +10,6 @@ use elliptic_curve::{CurveArithmetic, FieldBytesSize};
 use num_bigint::BigUint;
 use num_traits::Zero;
 
-// BigUint型をCiphertextとして再定義 (元コードではGoのbig.Intを直接使用)
 pub type Ciphertext = BigUint;
 
 pub struct BobMidResult {
@@ -30,7 +29,6 @@ where
     pub pb: ProofBobWC<C>,
 }
 
-// ParamOfProofBobを直接引数として受け取るバージョン
 pub fn bob_mid<C>(
     param: &ParamOfProofBob,
     pf: &RangeProofAlice,
@@ -55,7 +53,6 @@ where
         .homo_add(&param.pk.homo_mult(b, &param.c1), &cr.cypher);
     let beta = ModInt::new(&q).sub(&BigUint::zero(), &beta_prm);
 
-    // 新しいパラメータを作成（cbが新しい値になるため）
     let mut updated_param = param.clone();
     updated_param.c2 = cb.clone();
 
@@ -73,7 +70,6 @@ where
     })
 }
 
-// ParamOfProofBobを直接引数として受け取るバージョン
 pub fn bob_mid_wc<C>(
     param: &ParamOfProofBob,
     pf: &RangeProofAlice,
@@ -99,7 +95,6 @@ where
         .homo_add(&param.pk.homo_mult(b, &param.c1), &cr.cypher);
     let beta = ModInt::new(&q).sub(&BigUint::zero(), &beta_prm);
 
-    // 新しいパラメータを作成（cbが新しい値になるため）
     let mut updated_param = param.clone();
     updated_param.c2 = cb.clone();
 
@@ -131,7 +126,6 @@ where
     Ok((cr.cypher, rp))
 }
 
-// ParamOfProofBobを直接受け取るバージョン
 pub fn alice_end<C>(param: &ParamOfProofBob, pf: &ProofBob, sk: &PrivateKey) -> Result<BigUint>
 where
     C: CurveArithmetic,
@@ -147,7 +141,6 @@ where
     Ok(alpha_prm % q)
 }
 
-// ParamOfProofBobを直接受け取るバージョン
 pub fn alice_end_wc<C>(
     param: &ParamOfProofBob,
     pf: &ProofBobWC<C>,
