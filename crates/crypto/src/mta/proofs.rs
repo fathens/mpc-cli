@@ -596,12 +596,11 @@ mod test {
         }
 
         fn gen() -> Param {
-            const BITS: u64 = 2048;
             let mut rnd = rand::thread_rng();
             let mut bs = [0_u8; 32];
             rnd.fill_bytes(&mut bs);
             let session = Bytes::from(bs.to_vec());
-            let pk = paillier::PrivateKey::generate(BITS).public_key().to_owned();
+            let pk = paillier::PrivateKey::samples(None).public_key().to_owned();
 
             let q = ecdsa::curve_n::<Secp256k1>();
             let q5 = &q.pow(5);
