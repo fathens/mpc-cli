@@ -215,9 +215,9 @@ mod tests {
 
     type C = Secp256k1;
 
-    fn gen_param(ken_len: u64) -> Param {
+    fn gen_param() -> Param {
         let q = ecdsa::curve_n::<C>();
-        let sk = PrivateKey::generate(ken_len);
+        let sk = PrivateKey::samples(None);
         let pk = sk.public_key().to_owned();
         let ntildei = NTildei::generate_for_test()[0].clone();
 
@@ -272,7 +272,7 @@ mod tests {
 
     #[test]
     fn verify_by_gen() {
-        let param = gen_param(1024);
+        let param = gen_param();
         loop_new_and_verify(10, &param);
     }
 
@@ -288,5 +288,112 @@ mod tests {
         let bs: [Bytes; RangeProofAlice::NUM_PARTS] = src.clone().into();
         let dst: RangeProofAlice = bs.try_into().unwrap();
         assert_eq!(src, dst);
+    }
+
+    #[test]
+    fn verify_with_invalid_params() {
+        let (param, mut rp) = sample();
+
+        // 検証が成功することを確認（前提条件）
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // s1の値が大きすぎる場合、検証が失敗する
+        let original_s1 = rp.s1.clone();
+        rp.s1 = ecdsa::curve_n::<C>().pow(4); // q^4 > q^3
+        assert!(!rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // 元に戻す
+        rp.s1 = original_s1;
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // zの値がntildei.nより大きい場合、検証が失敗する
+        let original_z = rp.z.clone();
+        rp.z = &param.ntildei.n + 1u8;
+        assert!(!rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // 元に戻す
+        rp.z = original_z;
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+    }
+
+    #[test]
+    fn new_with_invalid_params() {
+        let param = gen_param();
+
+        // 正常系確認（前提条件）
+        let result =
+            RangeProofAlice::new::<C>(&param.pk, &param.c, &param.ntildei, &param.m, &param.r);
+        assert!(result.is_ok());
+
+        // 無効なモジュラスを持つPaillier公開鍵で検証
+        let invalid_n = BigUint::from(1u8); // 極端に小さい値
+        let invalid_pk = PublicKey::new(invalid_n);
+        let result =
+            RangeProofAlice::new::<C>(&invalid_pk, &param.c, &param.ntildei, &param.m, &param.r);
+        assert!(result.is_err());
+
+        // 無効なNTildeで検証
+        let invalid_ntildei = NTildei {
+            n: BigUint::from(1u8),
+            v1: param.ntildei.v1.clone(),
+            v2: param.ntildei.v2.clone(),
+        };
+        let result =
+            RangeProofAlice::new::<C>(&param.pk, &param.c, &invalid_ntildei, &param.m, &param.r);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn verify_with_gcd_violation() {
+        let (param, mut rp) = sample();
+
+        // 検証が成功することを確認（前提条件）
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // z と ntilde.n の最大公約数が1より大きい場合（互いに素でない場合）
+        let original_z = rp.z.clone();
+        // n の倍数にする（GCD > 1）
+        rp.z = &param.ntildei.n * BigUint::from(2u8);
+        assert!(!rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // 元に戻す
+        rp.z = original_z;
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // w と ntilde.n の最大公約数が1より大きい場合
+        let original_w = rp.w.clone();
+        rp.w = &param.ntildei.n * BigUint::from(3u8);
+        assert!(!rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // 元に戻す
+        rp.w = original_w;
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+    }
+
+    #[test]
+    fn verify_with_small_s_values() {
+        let (param, mut rp) = sample();
+
+        // 検証が成功することを確認（前提条件）
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // s1が曲線の位数q未満の場合、検証失敗
+        let original_s1 = rp.s1.clone();
+        let q = ecdsa::curve_n::<C>();
+        rp.s1 = q.clone() - BigUint::from(1u8); // q-1
+        assert!(!rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // 元に戻す
+        rp.s1 = original_s1;
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // s2が曲線の位数q未満の場合、検証失敗
+        let original_s2 = rp.s2.clone();
+        rp.s2 = q.clone() - BigUint::from(1u8); // q-1
+        assert!(!rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
+
+        // 元に戻す
+        rp.s2 = original_s2;
+        assert!(rp.verify::<C>(&param.pk, &param.ntildei, &param.c));
     }
 }
