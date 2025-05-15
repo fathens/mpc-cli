@@ -2,7 +2,7 @@ name: Check
 on: [push]
 
 jobs:
-  check:
+  format:
     runs-on: ubuntu-latest
     steps:
       - name: Install protoc
@@ -14,26 +14,55 @@ jobs:
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
-          components: rustfmt, clippy
+          components: rustfmt
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: taiki-e/install-action@cargo-tarpaulin
+      - name: Check format
+        run: cargo fmt --all -- --check
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install protoc
+        run: sudo apt-get install protobuf-compiler
+
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
 
       - uses: r7kamura/rust-problem-matchers@v1
 
-      - name: Check format
-        continue-on-error: true
-        run: cargo fmt --all -- --check
-
       - name: Check clippy
-        continue-on-error: true
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - uses: giraffate/clippy-action@v1
         with:
           reporter: 'github-pr-review'
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install protoc
+        run: sudo apt-get install protobuf-compiler
+
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@cargo-tarpaulin
 
       - name: Report test coverage
         run: |
