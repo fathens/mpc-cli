@@ -54,7 +54,7 @@ impl VerifyParam {
             a,
             b,
             t,
-            &sigma,
+            sigma,
         ];
         let eh = hash_sha512_256i_tagged(&self.session, &list);
         eh.rejection_sample(&self.curve_n)

@@ -199,7 +199,7 @@ impl ProofBob {
                         pk.n(),
                         &(pk.n() + 1_u8),
                         c1,
-                        &c2,
+                        c2,
                         &self.z,
                         &self.z_prm,
                         &self.t,
