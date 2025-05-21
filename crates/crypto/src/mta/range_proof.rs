@@ -133,6 +133,11 @@ impl RangeProofAlice {
         };
         let minus_e = e.to_bigint().unwrap().neg();
 
+        // Check if GCD conditions are met before attempting modular exponentiation
+        if self.u.gcd(&n2).bits() > 1 || self.z.gcd(&ntildei.n).bits() > 1 {
+            return false;
+        }
+
         // 4.
         {
             let mod_n_square = ModInt::new(&n2);
