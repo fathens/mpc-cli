@@ -45,10 +45,10 @@ pub fn is_number_in_multiplicative_group(modulus: &BigUint, number: &BigUint) ->
 }
 
 pub fn get_random_positive_relatively_prime_int(modulus: &BigUint) -> Result<BigUint> {
-    if modulus.is_zero() {
+    if modulus.is_zero() || modulus <= &BigUint::from(1u8) {
         return Err(CommonError::invalid_argument(
             modulus,
-            "modulus must not be zero",
+            "modulus must be greater than 1",
         ));
     }
 
@@ -235,7 +235,13 @@ mod tests {
     fn get_random_positive_relatively_prime_int_failure() {
         let err = get_random_positive_relatively_prime_int(&BigUint::zero()).unwrap_err();
         assert_eq!(
-            CommonError::invalid_argument(BigUint::zero(), "modulus must not be zero"),
+            CommonError::invalid_argument(BigUint::zero(), "modulus must be greater than 1"),
+            err
+        );
+
+        let err = get_random_positive_relatively_prime_int(&BigUint::from(1u8)).unwrap_err();
+        assert_eq!(
+            CommonError::invalid_argument(BigUint::from(1u8), "modulus must be greater than 1"),
             err
         );
     }
