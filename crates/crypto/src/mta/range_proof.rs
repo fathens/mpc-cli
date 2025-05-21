@@ -33,6 +33,18 @@ impl RangeProofAlice {
     where
         C: CurveArithmetic,
     {
+        // セキュリティチェックを追加
+        let min_size = 64; // 最低ビット長（例：64ビット）
+        if pk.n().bits() < min_size {
+            return Err(CryptoError::key_size_too_small(pk.n().bits(), min_size));
+        }
+        if ntildei.n.bits() < min_size {
+            return Err(CryptoError::ntilde_size_too_small(
+                ntildei.n.bits(),
+                min_size,
+            ));
+        }
+
         let h1 = &ntildei.v1;
         let h2 = &ntildei.v2;
 
@@ -331,7 +343,7 @@ mod tests {
         assert!(result.is_ok());
 
         // 無効なモジュラスを持つPaillier公開鍵で検証
-        let invalid_n = BigUint::from(1u8); // 極端に小さい値
+        let invalid_n = BigUint::from(4u8); // 1 から 4 に変更（小さいが2以上の値）
         let invalid_pk = PublicKey::new(invalid_n);
         let result =
             RangeProofAlice::new::<C>(&invalid_pk, &param.c, &param.ntildei, &param.m, &param.r);
@@ -339,7 +351,7 @@ mod tests {
 
         // 無効なNTildeで検証
         let invalid_ntildei = NTildei {
-            n: BigUint::from(1u8),
+            n: BigUint::from(4u8), // 1 から 4 に変更（小さいが2以上の値）
             v1: param.ntildei.v1.clone(),
             v2: param.ntildei.v2.clone(),
         };

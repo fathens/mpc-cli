@@ -74,6 +74,20 @@ impl CryptoError {
     pub fn field_overflow() -> CryptoError {
         CryptoError("Field overflow".to_owned())
     }
+
+    pub fn key_size_too_small(got: u64, required: u64) -> CryptoError {
+        CryptoError(format!(
+            "Key size too small: {}-bits, minimum required: {}-bits",
+            got, required
+        ))
+    }
+
+    pub fn ntilde_size_too_small(got: u64, required: u64) -> CryptoError {
+        CryptoError(format!(
+            "NTilde size too small: {}-bits, minimum required: {}-bits",
+            got, required
+        ))
+    }
 }
 
 impl Display for CryptoError {
