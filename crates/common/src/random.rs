@@ -259,7 +259,7 @@ mod tests {
     fn get_random_generator_of_the_quadratic_residue_failure() {
         let err = get_random_generator_of_the_quadratic_residue(&BigUint::zero()).unwrap_err();
         assert_eq!(
-            CommonError::invalid_argument(BigUint::zero(), "modulus must not be zero"),
+            CommonError::invalid_argument(BigUint::zero(), "modulus must be greater than 1"),
             err
         );
     }
