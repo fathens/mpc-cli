@@ -79,6 +79,25 @@ where
     pu.to_affine()
 }
 
+pub fn scalar_mul<C>(p: C::AffinePoint, k: &BigUint) -> C::AffinePoint
+where
+    C: CurveArithmetic,
+{
+    let s = to_scalar::<C>(k);
+    let pu = C::ProjectivePoint::from(p) * s;
+    pu.to_affine()
+}
+
+pub fn point_add<C>(p1: C::AffinePoint, p2: C::AffinePoint) -> C::AffinePoint
+where
+    C: CurveArithmetic,
+{
+    let pu1 = C::ProjectivePoint::from(p1);
+    let pu2 = C::ProjectivePoint::from(p2);
+    let pu = pu1 + pu2;
+    pu.to_affine()
+}
+
 pub fn to_scalar<C>(k: &BigUint) -> C::Scalar
 where
     C: CurveArithmetic,

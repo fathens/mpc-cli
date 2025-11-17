@@ -8,6 +8,7 @@ pub mod hdpath;
 pub mod mta;
 pub mod paillier;
 pub mod proof;
+mod schnorr;
 pub mod utils;
 
 pub use error::CryptoError;
