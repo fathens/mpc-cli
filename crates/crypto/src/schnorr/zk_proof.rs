@@ -1,5 +1,6 @@
 use crate::hash::hash_sha512_256i_tagged;
 use crate::utils::ecdsa;
+use common::random::get_random_positive_int;
 use elliptic_curve::group::Curve;
 use elliptic_curve::sec1::{ModulusSize, ToEncodedPoint};
 use elliptic_curve::{CurveArithmetic, FieldBytesSize, Group};
@@ -21,7 +22,13 @@ where
     C::ProjectivePoint: ToEncodedPoint<C>,
     FieldBytesSize<C>: ModulusSize,
 {
-    pub fn new(alpha: C::AffinePoint, t: BigUint) -> Self {
+    pub fn new(session: &[u8], x: &BigUint, p: &C::AffinePoint) -> Self {
+        let q = &ecdsa::curve_n::<C>();
+        let g = ecdsa::point_xy(&C::ProjectivePoint::generator().to_affine());
+
+        let a = get_random_positive_int(q).unwrap();
+        let alpha = ecdsa::generate_mul(&a);
+
         Self { alpha, t }
     }
 
@@ -36,5 +43,22 @@ where
         let xc = ecdsa::scalar_mul::<C>(*p, &c);
         let ax = ecdsa::point_add::<C>(self.alpha, xc);
         t == ax
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use k256::Secp256k1;
+    use rand::RngCore;
+
+    #[test]
+    fn test_verify_true() {
+        let q = ecdsa::curve_n::<Secp256k1>();
+        let u = get_random_positive_int(&q).unwrap();
+        let x = ecdsa::generate_mul::<Secp256k1>(&u);
+
+        let mut bs = [0_u8; 32];
+        let session = rand::thread_rng().fill_bytes(&mut bs);
     }
 }
